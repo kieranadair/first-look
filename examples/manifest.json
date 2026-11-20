@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "files": {
+    "penguins.csv": {
+      "sha256": "f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93",
+      "bytes": 15241
+    },
+    "bike_daily.csv": {
+      "sha256": "a6bcf826782d3c0fbfdcbeead17cd0884185a0dafe8ff10cd48a874ee7ba18be",
+      "bytes": 57569
+    }
+  }
+}

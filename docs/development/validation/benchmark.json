@@ -1,0 +1,57 @@
+{
+  "environment": {
+    "python": "3.12.14",
+    "firstlook": "0.1.0",
+    "packages": {
+      "streamlit": "1.67.0",
+      "pandas": "2.3.3",
+      "numpy": "2.5.5",
+      "scipy": "1.18.1",
+      "scikit-learn": "1.9.0",
+      "pydantic": "2.14.1",
+      "openai": "3.57.0",
+      "typesafe-sdk": "0.7.5",
+      "tabpfn-client": "0.7.1",
+      "matplotlib": "3.11.2"
+    }
+  },
+  "machine": {
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "logical_cpus": 3,
+    "machine_memory_GiB": 9.73
+  },
+  "timings_seconds": {
+    "load_penguins": 0.0966,
+    "profile_penguins": 0.0516,
+    "discover_penguins": 0.8439,
+    "challenge_penguins": 0.0958,
+    "local_models_600_rows": 0.2782,
+    "export_penguins": 0.1023,
+    "import_penguins": 0.0861,
+    "recompute_penguins": 0.188,
+    "two_concurrent_investigations": 1.444,
+    "repeat_discovery_10": 2.3335,
+    "load_50000x20": 2.4333,
+    "profile_50000x20": 1.2977,
+    "discover_50000x20": 4.4907,
+    "challenge_50000x20": 0.5667,
+    "local_models_10000_of_50000": 0.9162
+  },
+  "concurrent_durations_seconds": [
+    0.6071792419998019,
+    1.4369618139999147
+  ],
+  "peak_process_RSS_MiB": 356.84,
+  "current_process_RSS_MiB": 342.73,
+  "bundle_bytes": 56765,
+  "replay_matches": 19,
+  "nonlinear_gradient_boosting_R2": 0.9662621671430127,
+  "hosted_models_ran": false,
+  "large_workload": {
+    "rows": 50000,
+    "fields": 20,
+    "source_bytes": 7996262,
+    "decoded_MiB": 12.49
+  },
+  "scope": "Single Linux process; local measured fixtures. Not a Cloud capacity or model accuracy benchmark."
+}

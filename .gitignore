@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.streamlit/secrets.toml
+.env
+.firstlook/
+scratch/
+build/
+dist/
+*.egg-info/
+*.zip
+
+reports/*
+!reports/.gitkeep

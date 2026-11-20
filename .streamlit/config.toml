@@ -1,0 +1,70 @@
+[server]
+headless = true
+enableStaticServing = true
+maxUploadSize = 25
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "light"
+font = "Plex Sans"
+headingFont = "Plex Sans"
+codeFont = "Plex Mono"
+baseFontSize = 16
+baseFontWeight = 400
+headingFontSizes = ["34px", "26px", "21px", "18px", "16px", "14px"]
+headingFontWeights = [600, 600, 600, 500, 500, 500]
+metricValueFontSize = "1.8rem"
+metricValueFontWeight = 600
+baseRadius = "10px"
+buttonRadius = "8px"
+paddingTop = "1.5rem"
+paddingBottom = "3rem"
+showSidebarBorder = true
+
+[[theme.fontFaces]]
+family = "Plex Sans"
+url = "app/static/IBMPlexSans.ttf"
+weight = "100 700"
+
+[[theme.fontFaces]]
+family = "Plex Mono"
+url = "app/static/IBMPlexMono.ttf"
+weight = 400
+
+[theme.light]
+primaryColor = "#3157CE"
+backgroundColor = "#F6F8FC"
+secondaryBackgroundColor = "#EDF1F8"
+textColor = "#152239"
+linkColor = "#244BB8"
+borderColor = "#D4DCE8"
+dataframeHeaderBackgroundColor = "#E5EBF5"
+chartCategoricalColors = ["#4169D8", "#209589", "#C67049", "#9774BD", "#A58A30", "#647B9C", "#CD7099", "#5598B0"]
+
+[theme.light.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#EDF1F8"
+textColor = "#152239"
+borderColor = "#D4DCE8"
+primaryColor = "#3157CE"
+linkColor = "#244BB8"
+
+[theme.dark]
+primaryColor = "#3157CE"
+backgroundColor = "#0F1522"
+secondaryBackgroundColor = "#182235"
+textColor = "#E8EEF8"
+linkColor = "#ADC4FF"
+borderColor = "#34435B"
+dataframeHeaderBackgroundColor = "#263550"
+chartCategoricalColors = ["#86A9FF", "#63CFBD", "#E8A47D", "#B59ADD", "#D5BD67", "#9DB6DC", "#EA9DC3", "#84BDCE"]
+
+[theme.dark.sidebar]
+backgroundColor = "#141D2D"
+secondaryBackgroundColor = "#182235"
+textColor = "#E8EEF8"
+borderColor = "#34435B"
+primaryColor = "#3157CE"
+linkColor = "#ADC4FF"

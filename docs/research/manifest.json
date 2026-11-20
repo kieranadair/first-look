@@ -1,0 +1,11 @@
+{
+  "research_date": "2026-11-20",
+  "report_url": "https://chatgpt.com/space/page_97e3932984b48191b39400f716d5f353",
+  "streamlit_version": "1.67.0",
+  "official_skill": ".agents/skills/developing-with-streamlit/SKILL.md",
+  "skill_sha256": "af871722576bc982344b9515dfddb337ce272fad0b84ad8f5919c6dae64b8e84",
+  "skill_installation": "Copied official bundled meta-skill locally after CLI symlink and global fallback failures; discovery verified",
+  "few_index_topic_entries": 579,
+  "few_index_unique_urls": 423,
+  "scope": "Public-source research, source index, and architecture recommendations; no comparative tool benchmark or paid model evaluation"
+}

@@ -1,0 +1,35 @@
+{
+  "responsive_cards": [
+    {
+      "width": 1440,
+      "card_widths": [
+        980,
+        482,
+        482
+      ]
+    },
+    {
+      "width": 1024,
+      "card_widths": [
+        564,
+        564,
+        564
+      ]
+    },
+    {
+      "width": 390,
+      "card_widths": [
+        358,
+        358,
+        358
+      ]
+    }
+  ],
+  "echarts_selection_apply_reset": true,
+  "download_zip_bytes": 128499,
+  "download_filename": "first-look-investigation.zip",
+  "light_and_dark_tokens": true,
+  "page_errors": [],
+  "console_warnings": [],
+  "screenshots_video_traces": false
+}

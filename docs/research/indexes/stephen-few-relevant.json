@@ -1,0 +1,787 @@
+[
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Data Is Not Beautiful",
+    "url": "http://www.perceptualedge.com/blog/?p=2706"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "What Is Data Visualization?",
+    "url": "http://www.perceptualedge.com/blog/?p=2636"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Something Going Up Is Not Always Good",
+    "url": "http://www.perceptualedge.com/blog/?p=2702"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Confusing Expressions of Relative Proportions",
+    "url": "http://www.perceptualedge.com/blog/?p=2690"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Can VR Enhance Data Visualization?",
+    "url": "http://www.perceptualedge.com/blog/?p=2627"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "There Is No Science of Data",
+    "url": "http://www.perceptualedge.com/blog/?p=2560"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "A Cauldron of Terminological Confusion",
+    "url": "http://www.perceptualedge.com/blog/?p=2496"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Data Visualization Lite",
+    "url": "http://www.perceptualedge.com/blog/?p=2417"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Abela's Folly \u2013 A Thought Confuser",
+    "url": "http://www.perceptualedge.com/blog/?p=2080"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Data Visualization for Human Perception",
+    "url": "https://www.interaction-design.org/literature/book/the-encyclopedia-of-human-computer-interaction-2nd-ed/data-visualization-for-human-perception"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Display Platforms for Quantitative Information",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/display_platforms_for_quantitative_information.pdf"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Why Do We Visualize Quantitative Data?",
+    "url": "http://www.perceptualedge.com/blog/?p=1897"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "What Makes a Chart Boring?",
+    "url": "http://www.perceptualedge.com/blog/?p=1612"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Use-Based Types of Quantitative Display",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/types_of_quantitative_display.pdf"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Boris, speak only of what you know",
+    "url": "http://www.perceptualedge.com/blog/?p=1161"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Simplicity vs. Complexity: Design Goals",
+    "url": "http://www.perceptualedge.com/blog/?p=903"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "What can the Wall Street Journal teach us about information graphics?",
+    "url": "http://www.perceptualedge.com/blog/?p=707"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Data Visualization: Keeping the Story Straight",
+    "url": "http://www.perceptualedge.com/blog/?p=613"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Can Computers Analyze Data?",
+    "url": "http://www.perceptualedge.com/blog/?p=452"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Do We Really Need More Data?",
+    "url": "http://www.perceptualedge.com/blog/?p=438"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Sometimes We Must Raise Our Voices",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/sometimes_we_must_raise_our_voices.pdf"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Data Visualization and Analysis\u2014BI's Blind Spots",
+    "url": "http://www.perceptualedge.com/blog/?p=367"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Godin's Silly Rules for Great Graphs",
+    "url": "http://www.perceptualedge.com/blog/?p=247"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Infovis as Seen by the World Out There: 2007 in Review",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/infovis_as_seen_by_the_world.pdf"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Information Graphics: A Celebration and Recollection",
+    "url": "http://www.perceptualedge.com/articles/guests/Information%20Graphics.pdf"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Periodic table of visualization methods exhibits poor visual design",
+    "url": "http://www.perceptualedge.com/blog/?p=81"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Data Visualization \u2014 Past, Present, and Future",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Data_Visualization.pdf"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Visual Pattern Recognition",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Visual_Pattern_Rec.pdf"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Visual and Interactive Analytics: Fulfilling the Promise of Business Intelligence",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Visual_Analytics.pdf"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Let's open our eyes\u2013the importance of data visualization to BI",
+    "url": "http://www.perceptualedge.com/blog/?p=21"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Effectively Communicating Numbers: Selecting the Best Means and Manner of Display",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Communicating_Numbers.pdf"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Quantitative vs. Categorical Data: A Difference Worth Knowing",
+    "url": "http://www.perceptualedge.com/articles/dmreview/quant_vs_cat_data.pdf"
+  },
+  {
+    "topic": "Data visualization concepts and taxonomies",
+    "title": "Eenie, Meenie, Minie, Moe: Selecting the Right Graph for Your Message",
+    "url": "http://www.perceptualedge.com/articles/ie/the_right_graph.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Heatmaps: to Bin or Not to Bin?",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/heatmaps_to_bin_or_not.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Do tooltips reduce the need for precision in graphs?",
+    "url": "http://www.perceptualedge.com/blog/?p=2596"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Confusion about Line Graphs",
+    "url": "http://www.perceptualedge.com/blog/?p=2578"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Data Visualization Effectiveness Profile",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/data_visualization_effectiveness_profile.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Bar Widths and the Spaces in Between",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/bar_widths.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Expressing Proportions",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/expressing_proportions.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Avoiding Quantitative Scales That Make Graphs Hard to Read",
+    "url": "http://www.perceptualedge.com/blog/?p=2378"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Visualizing Wide-Variation Data",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/visualizing_wide-variation_data.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "When Are 100% Stacked Bar Graphs Useful?",
+    "url": "http://www.perceptualedge.com/blog/?p=2239"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Displaying Missing Values and Incomplete Periods in Time Series",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/missing_values_and_incomplete_periods_in_time_series.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Distribution Displays, Conventional and Potential",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/distribution_displays.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Displaying Change Between Two Points in Time",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/displaying_change_between_two_points_in_time.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Variation and Its Discontents: Funnel Plots for Fair Comparisons",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/variation_and_its_discontents.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "A Template for Creating Cycle Plots in Excel",
+    "url": "http://www.perceptualedge.com/blog/?p=1780"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Black or White: What Color Works Best for the Background of a Screen?",
+    "url": "http://www.perceptualedge.com/blog/?p=1445"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Designing Effective Tables and Graphs",
+    "url": "http://www.perceptualedge.com/images/Effective_Chart_Design.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Infographics and the Brain: Designing Graphics to Inform",
+    "url": "http://www.perceptualedge.com/articles/misc/Infographics_and_the_Brain.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Quantitative Displays for Combining Time-Series and Part-to-Whole Relationships",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/displays_for_combining_time-series_and_part-to-whole.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Xcelsius Developers Debate the Merits of \"Flashy vs. Few\"",
+    "url": "http://www.perceptualedge.com/blog/?p=537"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Introduction to Geographical Data Visualization",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/geographical_data_visualization.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Line Graphs and Irregular Intervals: An Incompatible Partnership",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/line_graphs_and_irregular_intervals.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Solutions to the Problem of Over-Plotting in Graphs",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/over-plotting_in_graphs.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Inflation Matters",
+    "url": "http://www.perceptualedge.com/articles/guests/inflation_matters.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Dual-Scaled Axes in Graphs: Are They Ever the Best Solution?",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/dual-scaled_axes.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Practical Rules for Using Color in Charts",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/rules_for_using_color.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Introduction to Cycle Plots",
+    "url": "http://www.perceptualedge.com/articles/guests/intro_to_cycle_plots.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Visualizing Change: An Innovation in Time-Series Analysis",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/visualizing_change.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Shane Schick and pies for many eyes",
+    "url": "http://www.perceptualedge.com/blog/?p=89"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Visual Pattern Recognition",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Visual_Pattern_Rec.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Visual Communication",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Visual_Communication.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Graph Designs for Reviewing Transactions and the Changing Balance",
+    "url": "http://www.perceptualedge.com/articles/b-eye/reviewing_transactions.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Graph Designs for Rapidly Assessing Budget Performance",
+    "url": "http://www.perceptualedge.com/articles/b-eye/assessing_budget_performance.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Visualizing time\u2013The efficacy of lines",
+    "url": "http://www.perceptualedge.com/blog/?p=34"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "The Surest Path to Visual Discovery",
+    "url": "http://www.perceptualedge.com/articles/b-eye/path_to_visual_discovery.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "BizViz: The Power of Visual Business Intelligence",
+    "url": "http://www.perceptualedge.com/articles/b-eye/visual_business_intelligence.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Best Practices for Understanding Quantitative Data",
+    "url": "http://www.perceptualedge.com/articles/b-eye/quantitative_data.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Data Visualization: Rules for Encoding Values in Graph",
+    "url": "http://www.perceptualedge.com/articles/b-eye/encoding_values_in_graph.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Choosing Colors for Data Visualization",
+    "url": "http://www.perceptualedge.com/articles/b-eye/choosing_colors.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Share your visual data analysis techniques",
+    "url": "http://www.perceptualedge.com/blog/?p=24"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Effectively Communicating Numbers: Selecting the Best Means and Manner of Display",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Communicating_Numbers.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Uses and Misuses of Color",
+    "url": "http://www.perceptualedge.com/articles/dmreview/color.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Grid Lines in Graphs are Rarely Useful",
+    "url": "http://www.perceptualedge.com/articles/dmreview/grid_lines.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Graph Selection Matrix",
+    "url": "http://www.perceptualedge.com/articles/misc/Graph_Selection_Matrix.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Elegance Through Simplicity",
+    "url": "http://www.perceptualedge.com/articles/ie/elegance.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Eenie, Meenie, Minie, Moe: Selecting the Right Graph for Your Message",
+    "url": "http://www.perceptualedge.com/articles/ie/the_right_graph.pdf"
+  },
+  {
+    "topic": "Data visualization techniques and best practices",
+    "title": "Common Mistakes in Data Presentation",
+    "url": "http://www.perceptualedge.com/articles/ie/data_presentation.pdf"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "The Least Amount of Information",
+    "url": "http://www.perceptualedge.com/blog/?p=2557"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "The Visual Perception of Variation in Data Displays",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/the_visual_perception_of_variation.pdf"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Data Visualization for Human Perception",
+    "url": "https://www.interaction-design.org/literature/book/the-encyclopedia-of-human-computer-interaction-2nd-ed/data-visualization-for-human-perception"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Data Visualization and the Blind",
+    "url": "http://www.perceptualedge.com/blog/?p=1756"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Infographics and the Brain: Designing Graphics to Inform",
+    "url": "http://www.perceptualedge.com/articles/misc/Infographics_and_the_Brain.pdf"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Practical Rules for Using Color in Charts",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/rules_for_using_color.pdf"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Improve Your Vision and Expand Your Mind with Visual Analytics",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Improve_Your_Vision.pdf"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Redundantly encoding time-series data in sight and sound does not speed up perception",
+    "url": "http://www.perceptualedge.com/blog/?p=95"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Visual Pattern Recognition",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Visual_Pattern_Rec.pdf"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Visual Communication",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Visual_Communication.pdf"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Choosing Colors for Data Visualization",
+    "url": "http://www.perceptualedge.com/articles/b-eye/choosing_colors.pdf"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Uses and Misuses of Color",
+    "url": "http://www.perceptualedge.com/articles/dmreview/color.pdf"
+  },
+  {
+    "topic": "Perception and cognition",
+    "title": "Tapping the Power of Visual Perception",
+    "url": "http://www.perceptualedge.com/articles/ie/visual_perception.pdf"
+  },
+  {
+    "topic": "Principles of design",
+    "title": "Design with a Purpose in Mind",
+    "url": "http://www.perceptualedge.com/blog/?p=2759"
+  },
+  {
+    "topic": "Principles of design",
+    "title": "Design vs. Art",
+    "url": "http://www.perceptualedge.com/blog/?p=1937"
+  },
+  {
+    "topic": "Principles of design",
+    "title": "Design for the Real World",
+    "url": "http://www.perceptualedge.com/blog/?p=1885"
+  },
+  {
+    "topic": "Principles of design",
+    "title": "Dieter Rams' Ten Principles for Good Design",
+    "url": "http://www.perceptualedge.com/blog/?p=1138"
+  },
+  {
+    "topic": "Principles of design",
+    "title": "Designing with the Mind in Mind: A Brief Book Review",
+    "url": "http://www.perceptualedge.com/blog/?p=907"
+  },
+  {
+    "topic": "Principles of design",
+    "title": "Simplicity vs. Complexity: Design Goals",
+    "url": "http://www.perceptualedge.com/blog/?p=903"
+  },
+  {
+    "topic": "Principles of design",
+    "title": "Information Visualization, Design, and the Arts: Collision or Collaboration?",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/information_visualization_and_art.pdf"
+  },
+  {
+    "topic": "Principles of design",
+    "title": "Designing the User Interface",
+    "url": "http://www.perceptualedge.com/blog/?p=418"
+  },
+  {
+    "topic": "Principles of design",
+    "title": "Visual Thinking for Design",
+    "url": "http://www.perceptualedge.com/blog/?p=243"
+  },
+  {
+    "topic": "Principles of design",
+    "title": "Things That Make Us Smart",
+    "url": "http://www.perceptualedge.com/blog/?paged=56"
+  },
+  {
+    "topic": "Self-Service Analytics",
+    "title": "The Myth of Self-Service Analytics",
+    "url": "http://www.perceptualedge.com/blog/?p=2467"
+  },
+  {
+    "topic": "Self-Service Analytics",
+    "title": "TIBCO Spotfire Promotes an Insidious Myth",
+    "url": "http://www.perceptualedge.com/blog/?p=2035"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Heatmaps: to Bin or Not to Bin?",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/heatmaps_to_bin_or_not.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Journey to Zvinca: The Making of a New Chart",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/journey_to_zvinca.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "The DataVis Jitterbug: Let's Improve an Old Dance",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/the_datavis_jitterbug.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Lollipop Charts: \"Who Loves You, Baby?\"",
+    "url": "http://www.perceptualedge.com/blog/?p=2642"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Confusion about Line Graphs",
+    "url": "http://www.perceptualedge.com/blog/?p=2578"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "When Are 100% Stacked Bar Graphs Useful?",
+    "url": "http://www.perceptualedge.com/blog/?p=2239"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Are Mosaic Plots Worthwhile?",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/are_mosaic_plots_worthwhile.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Variation and Its Discontents: Funnel Plots for Fair Comparisons",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/variation_and_its_discontents.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "A Template for Creating Cycle Plots in Excel",
+    "url": "http://www.perceptualedge.com/blog/?p=1780"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Wrapping Graphs to Extend Their Limits",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/wrapping_graphs_to_extend_their_limits.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Introducing Bandlines: Sparklines Enriched with Information about Magnitude and Distribution",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/introducing_bandlines.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "From Giant Hairballs to Clear Patterns in Networks",
+    "url": "http://www.perceptualedge.com/blog/?p=1636"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "What Can't Be Built with Bricks?",
+    "url": "http://www.perceptualedge.com/blog/?p=1627"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Building Insight with Bricks: A New, More Perceptible Method for Encoding Quantitative Values in Geospatial Displays",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/building_insight_with_bricks.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Bandlines Are Already Commercially Available",
+    "url": "http://www.perceptualedge.com/blog/?p=1485"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Best Practices for Scaling Sparklines in Dashboards",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/best_practices_for_scaling_sparklines.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Unit Charts Are For Kids",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/unit_charts_are_for_kids.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "NodeXL: Network Visualizations in Excel",
+    "url": "http://www.perceptualedge.com/blog/?p=680"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Horizon Graphs Revisited",
+    "url": "http://www.perceptualedge.com/blog/?p=390"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Software Support for Bullet Graphs\u2014An Increasingly Popular Means of Display",
+    "url": "http://www.perceptualedge.com/blog/?p=375"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Time on the Horizon",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/time_on_the_horizon.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "What's Up with Tag Clouds?",
+    "url": "http://www.perceptualedge.com/articles/guests/whats_up_with_tag_clouds.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Bullet Graphs for Not-to-Exceed Targets",
+    "url": "http://www.perceptualedge.com/blog/?p=217"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Introduction to Cycle Plots",
+    "url": "http://www.perceptualedge.com/articles/guests/intro_to_cycle_plots.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Save the Pies for Dessert",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/save_the_pies_for_dessert.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Business Objects' Bullet Graphs: A Good Idea, Implemented Poorly",
+    "url": "http://www.perceptualedge.com/blog/?p=160"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Enhanced Gantt Charts with Excel",
+    "url": "http://www.perceptualedge.com/blog/?p=145"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Sparkline Tickers\u2014What would Tufte think?",
+    "url": "http://www.perceptualedge.com/blog/?p=107"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Shane Schick and pies for many eyes",
+    "url": "http://www.perceptualedge.com/blog/?p=89"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Multivariate Analysis Using Heatmaps",
+    "url": "http://www.perceptualedge.com/articles/b-eye/heatmaps.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Multivariate Analysis Using Parallel Coordinates",
+    "url": "http://www.perceptualedge.com/articles/b-eye/parallel_coordinates.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "TableLens: A Clear Window for Viewing Multivariate Data",
+    "url": "http://www.perceptualedge.com/articles/b-eye/tablelens.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Visualizing time\u2013The efficacy of lines",
+    "url": "http://www.perceptualedge.com/blog/?p=34"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Discovering Business Intelligence Using Treemap Visualizations",
+    "url": "http://www.perceptualedge.com/articles/b-eye/treemaps.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Dot Plots: A Useful Alternative to Bar Charts",
+    "url": "http://www.perceptualedge.com/articles/b-eye/dot_plots.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Bullet Graph Design Specification",
+    "url": "http://www.perceptualedge.com/articles/misc/Bullet_Graph_Design_Spec.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Boxes of Insight",
+    "url": "http://www.perceptualedge.com/articles/dmreview/boxes_of_insight.pdf"
+  },
+  {
+    "topic": "Specific chart types",
+    "title": "Keep Radar Graphs Below the Radar - Far Below",
+    "url": "http://www.perceptualedge.com/articles/dmreview/radar_graphs.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Exploratory Data Analysis Tool Features: What's Needed and What Should Be Left Out",
+    "url": "http://www.perceptualedge.com/blog/?p=2459"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Criteria for Evaluating Visual EDA Tools",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/evaluating_visual_eda_tools.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Exploratory Vistas Ways to Become Acquainted with a Data Set for the First Time",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/exploratory_vistas.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Coordinated Highlighting in Context: Bringing Multidimensional Connections to Light",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/coordinated_highlighting_in_context.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Are visual analysis tools poised to become pervasive?",
+    "url": "http://www.perceptualedge.com/blog/?p=283"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Dashboard Confusion Revisited",
+    "url": "http://www.perceptualedge.com/articles/visual_business_intelligence/dboard_confusion_revisited.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Three Blind Men and an Elephant: The Power of Faceted Analytical Displays",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Three_Blind_Men.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Improve Your Vision and Expand Your Mind with Visual Analytics",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Improve_Your_Vision.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Multivariate Analysis Using Heatmaps",
+    "url": "http://www.perceptualedge.com/articles/b-eye/heatmaps.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Multivariate Analysis Using Parallel Coordinates",
+    "url": "http://www.perceptualedge.com/articles/b-eye/parallel_coordinates.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "An Introduction to Visual Multivariate Analysis",
+    "url": "http://www.perceptualedge.com/articles/b-eye/visual_multivariate_analysis.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "The Surest Path to Visual Discovery",
+    "url": "http://www.perceptualedge.com/articles/b-eye/path_to_visual_discovery.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "BizViz: The Power of Visual Business Intelligence",
+    "url": "http://www.perceptualedge.com/articles/b-eye/visual_business_intelligence.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Visual and Interactive Analytics: Fulfilling the Promise of Business Intelligence",
+    "url": "http://www.perceptualedge.com/articles/Whitepapers/Visual_Analytics.pdf"
+  },
+  {
+    "topic": "Visual exploratory data analysis",
+    "title": "Share your visual data analysis techniques",
+    "url": "http://www.perceptualedge.com/blog/?p=24"
+  }
+]
