@@ -1,32 +1,44 @@
 # Current implementation context
 
-Updated 20 November 2026 after the initial build and repository cleanup.
+Updated 22 November 2026 after the semantic-contract uplift (First Look 0.2).
 
 ## Product and architecture
 
-First Look combines profiling, editable semantic roles, constrained native ECharts, bounded discovery, challenges, held-out model diagnostics and portable evidence. Four work areas: Understand, Discover, Challenge, Evidence. Python 3.12; Streamlit 1.67; dependencies pinned at root. No SaaS/account/database layer or local foundation-model weights.
+First Look is a Python-only open-source visual investigation workbench. Five native Streamlit work areas: Understand, Meaning, Discover, Challenge, Evidence. Python 3.12, Streamlit 1.67. Runtime requirements are pinned; Pint is the only added runtime dependency in this uplift. No SaaS/account/database layer, local foundation-model weights, authored frontend or data lineage system.
 
-Runtime modules are in `firstlook/`; native pages in `app_pages/`; `streamlit_app.py` is the entrypoint. Source row/field identities and context hashes join typed contracts, numerical artifacts, charts, model diagnostics and replay. A session-owned bounded job manager runs expensive work outside reruns.
+`firstlook/semantic_contracts.py` defines the scoped semantic model. `firstlook/semantic/profile.py` performs bounded exact structural discovery and heuristic proposals; `model.py` validates/commits/imports declarations; `policy.py` evaluates operation permissions; `planner.py` shares metric plans and bounded metadata packets; `engine.py` executes the typed algebra; `checks.py` compares definitions. Existing numerical discovery and diagnostic views remain available while business decisions are unresolved.
+
+Dataset records include a semantic model scoped to the exact source fingerprint and parsing/physical-field layout. Meanings, metric definitions, entities, contextual hierarchy/membership evidence, time policies, assertions and focused clarifications participate in context identity. Changes invalidate dependent analyses and worker publication; source values are immutable. Pins retain the original context, field semantics and semantic-contract snapshot. Version 2 evidence bundles export the model and decision ledger; genuine version 1 bundles still replay.
+
+Typed metrics: row and distinct-entity counts, sum, recorded/entity means and median, weighted mean, sum per distinct entity, ratios with explicit population scope, latest entity snapshots, cumulative-counter increments, degree-based circular means, and permitted post-aggregation transformations. Repeated entity values require constancy; overlapping entity totals need explicit full-credit/equal observed-membership attribution. Other and temporal summaries recompute source components. Sums of states/rates/counters and invalid log/unit domains are blocked.
+
+Observed cadence is distinct from declared schedule. Structural zero requires confirmed event recording, coverage and last-complete date. Carry/interpolation is bounded and process-specific; explicit NULL is a barrier. Gap filling is disabled for arbitrary selected rows lacking scoped coverage. Counter resets remain missing and increments belong to the ending reading. No interval apportionment, holiday calendar or general missing-data imputation.
+
+Jev receives the contract and ranks eligible views and clarification choices. Terra receives definitions, metadata, matched visual/table evidence and model protocol; it can propose typed semantic hypotheses for human selection and finite semantic checks for Python execution. Neither changes facts or permissions automatically. Models respect declared entity holdout and predictor availability, including post-outcome categories. No joint group/time protocol or causal interpretation.
+
+A session-owned job manager runs expensive work outside reruns. Discovery retains twelve automatic findings; interactive working views are bounded at eighteen, with standalone pinned snapshots. Existing global/per-session worker limits and provider call budgets remain.
 
 ## Accepted user decisions
 
-- Host on Streamlit Community Cloud.
-- Keep owner credentials in server-side Cloud Secrets/environment variables. The user considered BYO keys, then chose the existing owner-key approach with provider usage caps. No BYO implementation was made.
-- User supplies and pays for Jev/TypeSafe, hosted TabPFN and OpenAI Terra credentials later. Use dedicated app keys and verify provider hard-limit semantics.
-- No screenshots of the live app. Beautiful native UI, light/dark themes, local licensed fonts; no authored frontend.
-- Publish as an open-source GitHub repository. Research and future-session context are separated from runtime deployment material.
+- Host repository root `streamlit_app.py` on Streamlit Community Cloud with Python 3.12.
+- Owner credentials belong in server-side Cloud Secrets/environment variables. The user considered BYO keys, then chose owner keys and provider caps. No frontend or session-state key entry.
+- Owner supplies Jev/TypeSafe, hosted TabPFN and OpenAI Terra credentials later. Dedicated keys/provider hard limits remain owner setup.
+- No screenshots of the live app, user-testing gate, custom CSS or JavaScript frontend. Tests use AppTest, the development agent API and image-free Python browser assertions.
+- Publish as the open-source GitHub repository `kieranadair/first-look`. Deployment, research and future-session notes are separated. Do not commit secrets, uploaded data or live provider transcripts.
 
-## Validation and boundaries
+## Validation
 
-Initial build: 88 tests passed, lint/format/type checks passed. AppTest, real agent API, actual browser chart selection/apply/reset/download and responsive light/dark UI checks passed without screenshots. Historical measurements are in `validation/`; current runs write ignored `reports/`.
+Current suite: 125 tests passed, lint/format/type checks passed. Controlled official SDK checks passed with no live provider calls. Real agent API tests cover original navigation/export and semantic metric execution/context invalidation. Browser assertions cover native chart selection/apply/reset/download, responsive light/dark layout and the semantic metric workflow. No screenshots/video/traces.
 
-A representative 50,000-row/20-field benchmark recorded about 4.5 seconds for discovery and 357 MiB peak process RSS on the declared local machine. These are not Cloud guarantees. Live API success and Terra visual uplift have not been verified; official SDKs were tested through controlled transports/boundaries. Actual Community Cloud deployment remains pending.
+A 50,000-row/20-field measured workload recorded approximately 3.5 seconds for discovery and 358 MiB peak process RSS on the declared local machine. These are not Community Cloud guarantees or a productivity experiment. Version 1 evidence generated by the previous committed application recomputed all 13 recorded outputs/checks under version 0.2. Current report artifacts are under `docs/development/validation/semantic-*`; regenerate new measurements in ignored `reports/`.
+
+Two upstream pandas 2.3.3 / NumPy 2.5.5 resampling deprecation warnings remain in the replay fixture. They do not affect the checked values; do not hide them or infer future-version compatibility. Production deployment configuration keeps the agent API disabled.
 
 ## Next useful work
 
-1. Configure owner Cloud Secrets and provider usage caps; run explicit live preflight.
-2. Deploy root `streamlit_app.py` on Community Cloud with Python 3.12.
-3. Evaluate matched text/visual Terra conditions before claiming uplift. Keep quantities and causal assertions outside unverified generated prose.
-4. Preserve the full local workflow when a provider is unavailable.
+1. Configure owner secrets/provider caps and explicitly run small live preflight calls. Do not claim live provider success from controlled SDK tests.
+2. Deploy/update Community Cloud from root `streamlit_app.py` with Python 3.12. Actual Cloud availability is not verified by a local run or GitHub push.
+3. Run matched text/visual Terra evaluation before claiming incremental model benefit. No measured 100× productivity claim exists.
+4. Preserve exact dataset/parse scope, semantic permissions, source memberships and deterministic replay when extending the algebra. Add independent numerical oracles for new operations.
 
-Repository cleanup retains source research and historical measurements, removes obsolete handoffs/checklists/API dumps and generated evidence bundles, and introduces a runtime-only packaging allowlist. `deployment/README.md` is the authoritative deployment guide; `docs/development/README.md` is the development guide.
+See [semantic uplift report](semantic-uplift.md), [research-to-pattern mapping](../research/semantic-contract.md), [development commands](README.md) and [deployment guide](../../deployment/README.md). The original long specification remains design history.

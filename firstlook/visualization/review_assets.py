@@ -55,7 +55,14 @@ def render_asset(result: ResultArtifact, spec: ChartSpec, max_points: int = 600)
             if spec.template == "ecdf":
                 ax.step(x, data.value, where="post", color=PALETTE[0])
             else:
-                ax.plot(x, data.value, color=PALETTE[0], marker="o", markersize=3)
+                ax.plot(
+                    x,
+                    data.value,
+                    color=PALETTE[0],
+                    marker="o",
+                    markersize=3,
+                    linestyle="--" if any(r.get("synthetic") for r in result.records) else "-",
+                )
         elif spec.template == "histogram":
             widths = data.right - data.left if "right" in data else None
             ax.bar(data.x, data.value, width=widths if widths is not None else 0.04, color=PALETTE[0])

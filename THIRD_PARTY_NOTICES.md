@@ -6,6 +6,7 @@ First Look application code is Apache-2.0. Third-party code and data retain thei
 - Palmer Penguins: CC0. See `examples/README.md` and the original project attribution.
 - UCI Bike Sharing daily: CC BY 4.0. See `examples/README.md` for creator, DOI, source and modification notice.
 - Streamlit and the Apache ECharts renderer it distributes: Apache-2.0. First Look calls Streamlit’s native `st.echarts_chart`; it bundles no separately authored frontend or JavaScript library. Sources: https://github.com/streamlit/streamlit and https://echarts.apache.org/ .
+- Pint: BSD-3-Clause; used for quantity/offset-unit validation. Source: https://github.com/hgrecco/pint .
 - Runtime dependencies retain the licenses in their installed distributions. `requirements-lock.txt` identifies the resolved versions, and evidence bundles include relevant package versions.
 
 Jev/TypeSafe, hosted TabPFN/Prior Labs and OpenAI are external services. This repository includes Python client integrations, not provider model weights or a license to a hosted service. Account access, usage costs, data handling and service terms are controlled by each provider. The app’s explicit per-dataset external-analysis choice precedes those requests.

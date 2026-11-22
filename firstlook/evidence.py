@@ -50,6 +50,7 @@ def environment() -> dict:
         "typesafe-sdk",
         "tabpfn-client",
         "matplotlib",
+        "pint",
     ]:
         try:
             versions[name] = version(name)
@@ -69,6 +70,18 @@ def brief(workspace: Workspace) -> str:
     ]
     if ds:
         lines += [f"Dataset fingerprint: {ds.record.fingerprint}", "", f"Source: {ds.record.source}", ""]
+        if ds.record.semantic_model:
+            model = ds.record.semantic_model
+            lines += [
+                "## Analytical meaning",
+                "",
+                model.grain,
+                "",
+                f"Semantic revision: {model.revision}",
+                "",
+                f"Open decisions: {len(model.clarifications)}. Confirmed declarations do not establish causal or universal domain validity.",
+                "",
+            ]
     for i, p in enumerate(workspace.pins, 1):
         f = p["finding"]
         lines += [
@@ -130,6 +143,10 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
         "profiles/dataset.json": json_bytes(workspace.profile),
         "profiles/semantics.json": json_bytes([f.model_dump(mode="json") for f in ds.record.fields]),
         "profiles/semantic-review.json": json_bytes(workspace.semantic_review),
+        "semantics/contract.json": json_bytes(
+            ds.record.semantic_model.model_dump(mode="json") if ds.record.semantic_model else None
+        ),
+        "semantics/decisions.json": json_bytes(inv.semantic_decisions),
         "analysis/context.json": json_bytes(inv.context.model_dump(mode="json")),
         "analysis/findings.json": json_bytes([f.model_dump(mode="json") for f in inv.findings]),
         "analysis/challenges.json": json_bytes([c.model_dump(mode="json") for c in inv.challenges]),
@@ -161,7 +178,7 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
         files[data_name] = raw
     files["manifest.json"] = json_bytes(
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "app": "First Look",
             "data_file": data_name,
             "fingerprint": ds.record.fingerprint,
@@ -216,7 +233,7 @@ def read_bundle(data: bytes) -> dict[str, bytes]:
         manifest = json.loads(files["manifest.json"])
         if not isinstance(manifest, dict):
             raise ValueError("The investigation manifest must be an object.")
-        if manifest.get("schema_version") != 1 or manifest.get("app") != "First Look":
+        if manifest.get("schema_version") not in {1, 2} or manifest.get("app") != "First Look":
             raise ValueError("Unsupported investigation format.")
         return files
     except (zipfile.BadZipFile, KeyError, json.JSONDecodeError, RuntimeError, NotImplementedError) as exc:
@@ -250,12 +267,25 @@ def import_bundle(
         if ds.record.rows != record.rows or ds.record.columns != record.columns:
             raise ValueError("Recorded dimensions do not match the supplied data.")
         ds.record = record
+        if record.semantic_model:
+            from firstlook.semantic.model import validate_model
+
+            validate_model(ds, record.semantic_model)
+        if ds.context(ctx.row_ids, ctx.focus, ctx.assumption).id != ctx.id:
+            raise ValueError("The recorded semantic contract does not match the analytical context.")
     else:
         # A data-free bundle supports saved-result inspection, not computational replay.
         import pandas as pd
 
         ds = Dataset(record, pd.DataFrame(columns=pd.Index([f.id for f in record.fields])), None)
     inv = Investigation(ctx)
+    inv.semantic_decisions = json.loads(files.get("semantics/decisions.json", b"[]"))
+    if not isinstance(inv.semantic_decisions, list) or len(inv.semantic_decisions) > 2000:
+        raise ValueError("Invalid semantic decision ledger.")
+    if "semantics/contract.json" in files:
+        expected = record.semantic_model.model_dump(mode="json") if record.semantic_model else None
+        if json.loads(files["semantics/contract.json"]) != expected:
+            raise ValueError("The exported semantic contract and dataset record disagree.")
     inv.findings = [Finding.model_validate(v) for v in json.loads(files["analysis/findings.json"])]
     inv.challenges = [
         ChallengeResult.model_validate(v) for v in json.loads(files["analysis/challenges.json"])

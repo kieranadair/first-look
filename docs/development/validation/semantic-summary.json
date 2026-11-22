@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-22",
+  "app": "First Look",
+  "version": "0.2.0",
+  "tests_passed": 125,
+  "lint": "passed",
+  "format": "passed",
+  "type_check": "passed",
+  "pip_check": "passed",
+  "live_provider_calls": false,
+  "screenshots_video_traces": false,
+  "runtime_files": 59,
+  "runtime_manifest_sha256": "60455e0160066b0c2d887d3481d03856855063763010106d0f143a77fa42979a",
+  "known_warnings": [
+    "Two upstream pandas/NumPy resampling DeprecationWarnings in semantic replay fixture."
+  ],
+  "scope": "Local tests and controlled official SDK boundaries; no measured productivity uplift or verified Community Cloud availability.",
+  "agent_api_workflows": [
+    "original discovery/challenge/evidence",
+    "semantic metric/check/export/invalidation"
+  ],
+  "browser_workflows": [
+    "native chart selection/apply/reset",
+    "responsive light/dark cards",
+    "semantic metric controls and contract download"
+  ],
+  "browser_capture": "No screenshots, video or traces"
+}

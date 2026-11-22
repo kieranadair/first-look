@@ -1,0 +1,10 @@
+{
+  "landing_and_discovery": true,
+  "challenge": true,
+  "evidence": true,
+  "exports": true,
+  "download_bytes": [
+    "Download investigation",
+    "Download readable brief"
+  ]
+}

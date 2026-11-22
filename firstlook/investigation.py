@@ -12,9 +12,10 @@ from firstlook.ingest import Dataset
 from firstlook.semantics import dimensions
 from firstlook.providers.base import ProviderError
 from firstlook.visualization.review_assets import render_asset
+from firstlook.semantic.planner import semantic_packet
 
 
-def prioritize(inv: Investigation, jev) -> None:
+def prioritize(inv: Investigation, jev, dataset: Dataset | None = None) -> None:
     options = {f.id: f.title for f in inv.findings[:12]}
     options["none"] = "No view is useful for the stated focus"
     state = {
@@ -32,10 +33,34 @@ def prioritize(inv: Investigation, jev) -> None:
             for f in inv.findings[:12]
         ],
     }
+    if dataset is not None:
+        state["semantic_contract"] = semantic_packet(dataset, 8)
     record = jev.choose(state, options, "Choose the most useful next view given the focus and evidence.")
     inv.decisions.append(record)
     if record.accepted:
         inv.findings.sort(key=lambda f: f.id != record.choice)
+    if dataset is not None:
+        from firstlook.semantic.model import get_model
+
+        questions = get_model(dataset).clarifications[:8]
+        if questions:
+            options = {q.id: q.question for q in questions}
+            options["none"] = "No clarification is useful yet"
+            record = jev.choose(
+                {"focus": inv.context.focus, "questions": [q.model_dump(mode="json") for q in questions]},
+                options,
+                "Choose the clarification that unlocks the most useful valid analyses. Do not answer it or treat likelihood as truth.",
+            )
+            inv.decisions.append(record)
+            if record.accepted:
+                inv.semantic_decisions.append(
+                    {
+                        "stage": "clarification_priority",
+                        "question": record.choice,
+                        "provider": "jev",
+                        "semantic_revision": get_model(dataset).revision,
+                    }
+                )
 
 
 def valid_proposal(dataset: Dataset, inv: Investigation, proposal: HypothesisProposal) -> tuple[bool, str]:
@@ -91,6 +116,7 @@ def run_terra(
             "limitations": f.limitations,
             "chart": f.chart.model_dump(mode="json"),
             "eligible_checks": eligible(dataset, inv, f),
+            "definition": result.metadata.get("definition"),
             "completed_checks": [
                 {"operation": c.operation, "status": c.status, "summary": c.summary}
                 for c in inv.challenges
@@ -99,7 +125,7 @@ def run_terra(
         }
         # Keep both conditions exactly matched. Reduce complete views, never truncate JSON.
         candidate = views + [view]
-        if len(str(candidate)) > 36_000:
+        if len(str(candidate)) > 25_000:
             continue
         views.append(view)
         assets.append(clean(asset.manifest))
@@ -122,6 +148,7 @@ def run_terra(
                 "semantics_revision": inv.context.semantics,
                 "active_rows": len(inv.context.row_ids),
                 "remaining_checks": 2,
+                "semantic_contract": semantic_packet(dataset, 8),
                 "models": [
                     {
                         "id": m.id,
@@ -145,6 +172,10 @@ def run_terra(
             "missingness",
             "quantile_bin_summary",
             "residual_spread_by_bin",
+            "semantic_reconciliation",
+            "semantic_unit",
+            "semantic_denominator",
+            "semantic_gaps",
             "none",
         ],
     )

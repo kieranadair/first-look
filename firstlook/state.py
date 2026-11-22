@@ -42,6 +42,7 @@ class Workspace:
         self.investigation, self.model = None, None
         self.model_count = 0
         self.followups = 0
+        self.inspect_id = self.challenge_id = None
 
     def load(self, dataset: Dataset):
         from firstlook.profiling import profile
@@ -75,5 +76,8 @@ def pin(workspace: Workspace, finding_id: str) -> None:
             "semantics": [field.model_dump(mode="json") for field in workspace.dataset.record.fields]
             if workspace.dataset
             else [],
+            "semantic_contract": workspace.dataset.record.semantic_model.model_dump(mode="json")
+            if workspace.dataset and workspace.dataset.record.semantic_model
+            else None,
         }
     )

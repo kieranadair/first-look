@@ -20,6 +20,7 @@ ROOTS = [
     "matplotlib",
     "httpx",
     "threadpoolctl",
+    "pint",
 ]
 DEV = ["pytest", "hypothesis", "ruff", "ty", "playwright", "psutil"]
 
@@ -38,7 +39,7 @@ def main():
             if req.marker is None or req.marker.evaluate({"extra": ""}):
                 pending.append(req.name)
     Path("requirements-lock.txt").write_text(
-        "# Resolved runtime graph · Python 3.12/Linux · 2026-11-20\n"
+        "# Resolved runtime graph · Python 3.12/Linux · 2026-11-22\n"
         + "\n".join(f"{k}=={v}" for k, v in sorted(found.items()))
         + "\n"
     )

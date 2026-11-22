@@ -59,7 +59,9 @@ def main():
         checks["echarts_selection_apply_reset"] = True
         page.get_by_role("button", name="Run local investigation", exact=True).click()
         page.get_by_role("button", name="Pin", exact=True).first.click(timeout=45000)
+        page.get_by_role("button", name="Pinned", exact=True).first.wait_for(timeout=15000)
         page.get_by_role("link", name="Evidence", exact=True).click()
+        page.get_by_role("heading", name="Keep the evidence together.").wait_for(timeout=15000)
         page.get_by_role("button", name="Prepare downloads", exact=True).click(timeout=15000)
         with page.expect_download() as pending:
             page.get_by_role("button", name="Download investigation", exact=True).click()

@@ -62,6 +62,11 @@ def suggested_model_plan(dataset: Dataset, ctx: AnalysisContext) -> tuple[str, s
         for f in dataset.record.fields
         if f.role == Role.TIME and not f.excluded and dataset.frame.loc[ctx.row_ids, f.id].nunique() >= 5
     ]
+    from firstlook.semantic.model import get_model
+
+    group = get_model(dataset).model_group
+    if group:
+        return target, "group", group
     return target, "time" if times else "random", times[0] if times else None
 
 
@@ -70,7 +75,11 @@ def predictor_policy(dataset: Dataset, target: str, frame: pd.DataFrame) -> tupl
     for f in dataset.record.fields:
         if f.id == target:
             continue
-        if f.excluded or f.role in {Role.ID, Role.TIME, Role.TEXT, Role.UNKNOWN}:
+        from firstlook.semantic.model import get_model
+
+        if not get_model(dataset).meaning(f.id).available_at_prediction:
+            excluded[f.id] = "Declared unavailable at prediction time"
+        elif f.excluded or f.role in {Role.ID, Role.TIME, Role.TEXT, Role.UNKNOWN}:
             excluded[f.id] = "Excluded role or user exclusion"
         elif frame[f.id].nunique() < 2:
             excluded[f.id] = "Constant or empty"
@@ -189,6 +198,17 @@ def run_model(
     progress: Callable[[str], None] = lambda _: None,
     cancelled: Callable[[], bool] = lambda: False,
 ) -> ModelRun:
+    from firstlook.semantic.model import get_model
+
+    semantic_model = get_model(dataset)
+    if ctx.id != dataset.context(ctx.row_ids, ctx.focus, ctx.assumption).id:
+        raise ValueError("The predictive protocol has a stale semantic context.")
+    if semantic_model.model_group and (split != "group" or split_field != semantic_model.model_group):
+        raise ValueError(
+            "The semantic contract requires a group holdout on "
+            + dataset.label(semantic_model.model_group)
+            + ". Change the contract explicitly to use a different predictive task."
+        )
     if target not in eligible_targets(dataset):
         raise ValueError("Choose an eligible measure or supported categorical focus with 200 labeled rows.")
     data = dataset.frame.loc[ctx.row_ids].dropna(subset=[target])
@@ -274,6 +294,9 @@ def run_model(
             probs = model.predict_proba(xtest) if task == "classification" else None
             scores[name], outputs[name] = metrics_for(task, ytest, pred, probs), (pred, probs)
     warnings = [f"{len(data):,} labeled rows; fixed 70/30 protocol. Predictability is not causality."]
+    warnings.append(
+        "Predictor availability follows declared contract exclusions; undeclared prediction-time availability is an assumption requiring review."
+    )
     if split == "random" and ctx.assumption != "exchangeable":
         warnings.append("Row holdout is diagnostic: independence and future generalization are unverified.")
     record, accepted_record, active = {}, {}, "Gradient boosting"
@@ -341,6 +364,8 @@ def run_model(
         model_record=clean(record),
         parameters={
             "seed": SEED,
+            "semantic_revision": semantic_model.revision,
+            "group_constraint": semantic_model.model_group,
             "split_field": split_field,
             "preprocessing": "train-only",
             "baseline_max_iter": 80,

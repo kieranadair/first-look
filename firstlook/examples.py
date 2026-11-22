@@ -1,6 +1,8 @@
 """Small real examples and reproducible fixtures with declared known properties."""
 
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -24,6 +26,11 @@ CATALOG = {
         "Beyond a straight line",
         "Weak marginal summaries, joint structure and a model lens.",
         "show_chart",
+    ),
+    "semantic": (
+        "Orders aren’t rows",
+        "Repeated order values, overlapping categories and complete event days. See what analytical meaning changes.",
+        "schema",
     ),
     "null": (
         "When little is there",
@@ -67,6 +74,8 @@ def synthetic(kind: str, seed: int = 42, n: int = 600) -> pd.DataFrame:
 
 
 def load_example(key: str) -> Dataset:
+    if key == "semantic":
+        return semantic_example()
     if key in {"reversal", "nonlinear", "null"}:
         df = synthetic(key)
         raw = df.to_csv(index=False).encode()
@@ -83,5 +92,136 @@ def load_example(key: str) -> Dataset:
         "Palmer Penguins · CC0 · Horst, Hill and Gorman"
         if key == "penguins"
         else "UCI Bike Sharing daily · CC BY 4.0 · Fanaee-T"
+    )
+    return ds
+
+
+def semantic_example() -> Dataset:
+    """Generator supplies ground truth declarations; these are not inferred facts."""
+    from firstlook.contracts import digest
+    from firstlook.semantic.model import commit_model, get_model
+    from firstlook.semantic_contracts import Metric
+
+    rng = np.random.default_rng(2718)
+    rows = []
+    categories = ["Office", "Furniture", "Technology"]
+    for order in range(120):
+        date = pd.Timestamp(datetime(2024, 1, 1) + timedelta(days=int(rng.integers(0, 60))))
+        customer = f"C{int(rng.integers(1, 19)):02}"
+        order_rows: list[dict[str, Any]] = []
+        for _ in range(int(rng.integers(1, 5))):
+            category = categories[int(rng.integers(0, 3))]
+            quantity = int(rng.integers(1, 8))
+            price = round(float(rng.uniform(8, 140)), 2)
+            sales = round(quantity * price, 2)
+            profit = round(sales * float(rng.uniform(-0.15, 0.4)), 2)
+            order_rows.append(
+                dict(
+                    line_id=len(rows) + len(order_rows) + 1,
+                    order_id=f"O{order:03}",
+                    customer_id=customer,
+                    order_date=date,
+                    category=category,
+                    region=["North", "South", "West"][order % 3],
+                    sales=sales,
+                    profit=profit,
+                    quantity=quantity,
+                    unit_price=price,
+                )
+            )
+        total = round(sum(row["sales"] for row in order_rows), 2)
+        rows.extend({**row, "order_total": total} for row in order_rows)
+    df = pd.DataFrame(rows)
+    ds = load_table(df.to_csv(index=False).encode(), "orders-arent-rows.csv")
+    ds.record.name = CATALOG["semantic"][0]
+    ds.record.source = "Seeded synthetic semantic demonstration · seed 2718. The generator explicitly supplies the analytical definitions and complete event coverage."
+    ds.record.description = "One order line per row. Order totals repeat on every line. Orders can include several categories. All generated orders in January–February 2024 are recorded; absent event days are zero."
+    model = get_model(ds).model_copy(deep=True)
+    fields = {f.name: f.id for f in ds.record.fields}
+    order = next(e for e in model.entities if e.keys == [fields["order_id"]])
+    line = next(e for e in model.entities if e.keys == [fields["line_id"]])
+    model.grain = (
+        "One product-category line within an order; repeated order totals are entity values, not row amounts."
+    )
+    model.grain_confirmed = True
+    model.grain_entity = line.id
+    for name in ["sales", "profit", "quantity", "order_total", "unit_price"]:
+        meaning = model.meaning(fields[name])
+        meaning.kind = "rate" if name == "unit_price" else "flow"
+        meaning.confirmed = True
+        meaning.allowed_transforms = (
+            ["identity", "difference", "percent_change"]
+            if name == "profit"
+            else ["identity", "log", "sqrt", "zscore", "difference", "percent_change"]
+        )
+        if name != "quantity":
+            meaning.currency = "USD"
+            meaning.basis = "Nominal synthetic dollars; no conversion or inflation adjustment."
+    model.meaning(fields["profit"]).available_at_prediction = False
+    for metric in model.metrics:
+        if (
+            metric.field in {fields["sales"], fields["profit"], fields["quantity"]}
+            and metric.aggregation == "sum"
+        ):
+            metric.confirmed = True
+    for policy in model.time_policies:
+        policy.kind = "event"
+        policy.expected_frequency = "D"
+        policy.gap_policy = "zero"
+        policy.coverage_complete = True
+        policy.complete_through = "2024-02-29"
+        policy.confirmed = True
+    definitions = [
+        Metric(
+            id="demo_order_average",
+            label="Sales per distinct order",
+            aggregation="average_per_entity",
+            field=fields["sales"],
+            entity=order.id,
+            confirmed=True,
+            description="Recorded line sales divided by distinct orders with recorded sales. Contrast with equal row weighting.",
+        ),
+        Metric(
+            id="demo_allocated_orders",
+            label="Allocated order value",
+            aggregation="sum",
+            field=fields["order_total"],
+            entity=order.id,
+            allocation="equal",
+            confirmed=True,
+            description="Deduplicate order totals, then allocate each total equally across its distinct recorded category memberships.",
+        ),
+        Metric(
+            id="demo_weighted_price",
+            label="Quantity-weighted unit price",
+            aggregation="weighted_mean",
+            field=fields["unit_price"],
+            weight=fields["quantity"],
+            confirmed=True,
+            description="Total price × units divided by total units. Exposure is the recorded unit quantity.",
+        ),
+        Metric(
+            id="demo_margin",
+            label="Recomposed profit margin",
+            aggregation="ratio",
+            numerator="m_total_" + fields["profit"],
+            denominator="m_total_" + fields["sales"],
+            denominator_scope="group",
+            confirmed=True,
+            description="Sum recorded profit divided by sum recorded sales inside each group; never average line margins.",
+        ),
+    ]
+    model.metrics += definitions
+    commit_model(
+        ds,
+        model,
+        "table",
+        "demonstration",
+        {
+            "generator": "semantic_example",
+            "seed": 2718,
+            "definitions": [m.id for m in definitions],
+            "annotation": digest("Generator-defined synthetic truths"),
+        },
     )
     return ds

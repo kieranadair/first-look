@@ -1,0 +1,9 @@
+{
+  "native_semantic_workspace": true,
+  "named_metric_computation": true,
+  "semantic_challenges": true,
+  "evidence_download_controls": true,
+  "semantic_edit_invalidates_results": true,
+  "screenshots_video_traces": false,
+  "live_provider_calls": false
+}

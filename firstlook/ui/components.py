@@ -120,6 +120,21 @@ def evidence_inspector(finding: Finding, inv: Investigation):
     st.caption("WHY THIS VIEW")
     st.markdown(f"**Question:** {finding.title}")
     st.caption("Statistics, chart and exported values share this result artifact.")
+    if result.metadata.get("definition"):
+        with st.container(border=True):
+            st.markdown("**Analytical definition**")
+            definition = result.metadata["definition"]
+            st.caption(definition.get("description") or definition["aggregation"].replace("_", " "))
+            st.caption(
+                "Value grain: "
+                + (definition.get("entity") or "recorded rows")
+                + " · denominator scope: "
+                + definition.get("denominator_scope", "active_population")
+            )
+            st.caption(
+                "Transformation stage: after aggregation · contract " + result.metadata["semantic_revision"]
+            )
+            st.json(definition, expanded=False)
     for rule in rule_details(finding.chart.rules):
         st.caption(f"{rule['id']} · {rule['name']}. {rule['requirement']}")
     with st.expander("Research behind these constraints"):
@@ -141,6 +156,7 @@ def evidence_inspector(finding: Finding, inv: Investigation):
                 "support": result.support,
                 "metrics": result.metrics,
                 "warnings": result.warnings,
+                "semantic_metadata": result.metadata,
             }
         )
     for limitation in finding.limitations:

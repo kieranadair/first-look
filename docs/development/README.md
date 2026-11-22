@@ -26,8 +26,10 @@ In another terminal, from the repo root:
 
 ```bash
 python -m scripts.runtime_smoke
+python -m scripts.semantic_smoke
 playwright install chromium
 python -m scripts.browser_smoke
+python -m scripts.semantic_browser_smoke
 ```
 
 The browser test verifies actual chart-mark selection, filtering/reset, downloads, responsive cards and light/dark tokens. It captures **no screenshots, video or traces**. Stop the development server after checking.
@@ -35,6 +37,7 @@ The browser test verifies actual chart-mark selection, filtering/reset, download
 ## Reference material
 
 - [Current implementation context](CONTEXT.md)
+- [Semantic uplift build report](semantic-uplift.md) and [research-to-implementation mapping](../research/semantic-contract.md)
 - [Original design specification](specification.md), preserved as design history, not a second setup guide
 - [Historical build report](build-report.md)
 - [Recorded validation](validation/), retained for provenance; regenerate current results under ignored `reports/`

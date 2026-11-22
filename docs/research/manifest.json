@@ -7,5 +7,10 @@
   "skill_installation": "Copied official bundled meta-skill locally after CLI symlink and global fallback failures; discovery verified",
   "few_index_topic_entries": 579,
   "few_index_unique_urls": 423,
-  "scope": "Public-source research, source index, and architecture recommendations; no comparative tool benchmark or paid model evaluation"
+  "scope": "Public-source research, source index, and architecture recommendations; no comparative tool benchmark or paid model evaluation",
+  "semantic_extension": {
+    "research_date": "2026-11-22",
+    "document": "semantic-contract.md",
+    "scope": "Executable metric algebra, scoped structure, observation policies, unit checks and shared model constraints. Source-backed patterns; no measured productivity multiplier or live paid-provider evaluation."
+  }
 }

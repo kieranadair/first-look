@@ -278,3 +278,103 @@ def test_semantic_hypotheses_are_validated_without_mutating_data(dataset):
     results = validate_semantic_review(dataset, review)
     assert len(results) == 2 and results[0]["valid"] and not results[1]["valid"]
     assert dataset.record.model_dump() == original
+
+
+def test_official_semantic_review_returns_typed_metadata_hypotheses():
+    sent = []
+    payload = {
+        "schema_version": 1,
+        "suggestions": [],
+        "dataset_note": "Hypotheses require confirmation.",
+        "metadata_proposals": [
+            {
+                "subject": "f001",
+                "property": "kind",
+                "value": "flow",
+                "reason": "A name suggests an accrued amount; confirm its recording grain.",
+            }
+        ],
+    }
+
+    def reply(request):
+        sent.append(json.loads(request.content))
+        return httpx2.Response(200, json=response(payload))
+
+    provider = TerraProvider(Settings(openai_api_key="controlled-test-key"), openai_client(reply))
+    result = provider.semantics(
+        {"semantic_contract": {"grain_confirmed": False}, "fields": [{"id": "f001", "name": "sales"}]}
+    )
+    assert result.metadata_proposals[0].property == "kind"
+    packet = json.loads(sent[0]["input"][0]["content"][0]["text"])
+    assert "cannot be established from values alone" in packet["metadata_task"]
+    assert sent[0]["store"] is False
+
+
+def test_semantic_checks_and_definitions_reach_the_visual_reasoning_packet():
+    from firstlook.examples import load_example
+    from firstlook.discovery import Investigation, analyze
+    from firstlook.semantic.planner import metric_plan
+    from firstlook.investigation import run_terra
+    from firstlook.contracts import ProposalBatch, NarrativeSynthesis, HypothesisProposal
+
+    ds = load_example("semantic")
+    ctx = ds.context()
+    result, finding = analyze(ds, ctx, metric_plan(ds, ctx, "demo_order_average", ["f004"]))
+    inv = Investigation(ctx, findings=[finding], results={result.id: result})
+
+    class Reviewer:
+        records = []
+
+        def propose(self, packet, images):
+            assert packet.metadata["semantic_contract"]["grain_confirmed"]
+            assert packet.findings[0]["definition"]["aggregation"] == "average_per_entity"
+            assert "semantic_unit" in packet.findings[0]["eligible_checks"]
+            assert len(images) == 1
+            return ProposalBatch(
+                proposals=[
+                    HypothesisProposal(
+                        finding_id=finding.id,
+                        operation="semantic_unit",
+                        fields=result.plan.fields,
+                        question="Does the averaging unit change the conclusion?",
+                        reason="Rows and orders have different exposures.",
+                    )
+                ]
+            )
+
+        def synthesize(self, packet):
+            return NarrativeSynthesis(
+                interpretation="Averaging units answer different questions.", evidence_ids=[finding.id]
+            )
+
+    run_terra(ds, inv, Reviewer())
+    assert any(c.operation == "semantic_unit" and c.status == "changed" for c in inv.challenges)
+
+
+def test_jev_receives_semantics_and_only_prioritizes_unanswered_decisions(dataset):
+    from firstlook.investigation import prioritize
+    from firstlook.discovery import discover
+    from firstlook.contracts import DecisionRecord, digest
+    from firstlook.semantic.model import get_model
+
+    inv = discover(dataset)
+    before = get_model(dataset).revision
+    calls = []
+
+    class Decider:
+        def choose(self, state, options, instructions):
+            calls.append(state)
+            choice = next(k for k in options if k != "none")
+            return DecisionRecord(
+                provider="controlled",
+                requested_model="test",
+                state_hash=digest(state),
+                options=list(options),
+                choice=choice,
+                accepted=True,
+            )
+
+    prioritize(inv, Decider(), dataset)
+    assert "semantic_contract" in calls[0] and "questions" in calls[1]
+    assert get_model(dataset).revision == before
+    assert inv.semantic_decisions[-1]["stage"] == "clarification_priority"

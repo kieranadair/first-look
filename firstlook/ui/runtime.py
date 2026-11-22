@@ -81,7 +81,7 @@ def start_analysis(ws: Workspace, connected: bool = False) -> None:
         if jev and not cancelled():
             try:
                 progress("Jev is choosing among valid views")
-                prioritize(inv, jev)
+                prioritize(inv, jev, ds)
             except ProviderError as exc:
                 inv.terra["provider_note"] = str(exc)
         if connected and cfg.available("terra") and not cancelled():
@@ -155,18 +155,34 @@ def start_semantic_review(ws: Workspace) -> None:
             for f in ds.record.fields
         ],
     }
+    from firstlook.semantic.planner import semantic_packet
+
+    packet["semantic_contract"] = semantic_packet(ds, 12)
 
     def task(progress, cancelled):
         terra = TerraProvider(cfg)
         progress("Reviewing field meanings as unconfirmed hypotheses")
         review = terra.semantics(packet)
         from firstlook.semantics import validate_semantic_review
+        from firstlook.semantic.model import proposal_candidate
+
+        proposals = []
+        for proposal in review.metadata_proposals:
+            valid, reason = True, "Eligible hypothesis; explicit user selection is required."
+            try:
+                proposal_candidate(ds, proposal)
+            except ValueError as exc:
+                valid, reason = False, str(exc)
+            proposals.append(
+                {"proposal": proposal.model_dump(mode="json"), "valid": valid, "validation": reason}
+            )
 
         return {
             "context": ctx.id,
             "suggestions": validate_semantic_review(ds, review),
             "dataset_note": review.dataset_note,
             "records": terra.records,
+            "metadata_proposals": proposals,
         }
 
     ws.job_id = manager().submit(ws.owner, ctx.id, "semantic_review", task)

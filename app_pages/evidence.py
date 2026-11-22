@@ -21,7 +21,24 @@ with st.expander("Open a saved investigation"):
         except (ValueError, KeyError) as exc:
             st.error(str(exc))
 if ws.investigation is None:
-    st.info("Pin observations from Discover or Challenge. You can also open a saved bundle above.")
+    if ws.pins:
+        st.info(
+            "The current analytical definition changed. Your earlier pinned evidence remains preserved below. Run a new investigation to prepare a combined portable bundle."
+        )
+        for item in ws.pins:
+            with st.container(border=True):
+                st.subheader(item["finding"]["title"])
+                st.markdown(item["finding"]["observation"])
+                st.caption(
+                    "Preserved from an earlier analytical context: " + item["result"]["plan"]["context"]
+                )
+                with st.expander("Original analytical definition"):
+                    st.json(item.get("semantic_contract"), expanded=False)
+        st.download_button(
+            "Download preserved brief", brief(ws), "first-look-preserved-brief.md", "text/markdown"
+        )
+    else:
+        st.info("Pin observations from Discover or Challenge. You can also open a saved bundle above.")
     st.stop()
 st.caption(f"{len(ws.pins)} PINNED OBSERVATIONS  ·  {len(ws.investigation.challenges)} RECORDED CHECKS")
 if not ws.pins:
@@ -73,7 +90,7 @@ include = st.checkbox(
     help="Saved result tables can still contain private data when this is off.",
 )
 st.caption(
-    "The bundle includes contexts, calculations, chart contracts, challenges and recorded model decisions. API keys are excluded. Stored results can be inspected without another API call."
+    "The bundle includes the semantic contract, assertion and decision ledgers, metric definitions, contexts, calculations, chart contracts, challenges and recorded model decisions. API keys are excluded. Stored results can be inspected without another API call."
 )
 export_state = digest(
     [
@@ -122,6 +139,12 @@ if ws.replay:
                 st.dataframe(checks, hide_index=True, alt="Deterministic replay comparison results")
             except ValueError as exc:
                 st.error(str(exc))
+if ws.dataset and ws.dataset.record.semantic_model:
+    with st.expander("Recorded semantic contract"):
+        st.caption(
+            "Scope: exact uploaded table. Recorded declarations and computed evidence do not establish authorship or universal domain truth."
+        )
+        st.json(ws.dataset.record.semantic_model.model_dump(mode="json"), expanded=False)
 with st.expander("Methods and provenance"):
     st.mermaid_chart(
         "flowchart LR\n A[Table and semantics] --> B[Eligible plans]\n B --> C[Computed findings]\n C --> D[Challenges]\n C --> E[Model diagnostics]\n D --> F[Evidence]\n E --> F",

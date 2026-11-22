@@ -10,3 +10,5 @@ First Look is a Python-only open-source Streamlit visual investigation app. Read
 - Preserve role validation, context identity, held-out memberships and deterministic evidence. Models propose/prioritize; Python computes and validates. No generated code executes.
 - No live provider or productivity claims without actual evidence. Keys and live API verification are pending owner setup. Provider budgets are bounded per investigation, not a global spend cap.
 - Run appropriate tests, lint and type checks. UI interaction can be tested through AppTest, the development agent API and screenshot-free Python browser assertions. Do not enable the agent API in production.
+
+Semantic-contract work: use `firstlook/semantic/model.py` for atomic declarations and validation. Preserve exact dataset and parsing scope, context invalidation, explicit denominator/value grain and scoped observation coverage. Models rank/propose; they do not bypass operation eligibility or confirm business meaning. Add independent numerical oracles when extending the metric algebra. The shared semantic packet and evidence format must stay aligned with execution.

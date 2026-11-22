@@ -62,6 +62,47 @@ if ws.investigation is None:
         st.info("Run the local investigation to compute a shortlist and challenge its leading observations.")
     st.stop()
 inv, ds = ws.investigation, ws.dataset
+if not ws.replay:
+    from firstlook.semantic.model import get_model
+
+    semantic_model = get_model(ds)
+    if semantic_model.clarifications:
+        with st.expander("Decisions that could unlock stronger analyses"):
+            prioritized = next(
+                (
+                    d.get("question")
+                    for d in reversed(inv.semantic_decisions)
+                    if d.get("stage") == "clarification_priority"
+                ),
+                None,
+            )
+            questions = sorted(semantic_model.clarifications, key=lambda q: q.id != prioritized)
+            for q in questions[:3]:
+                st.markdown("**" + q.question + "**")
+                st.caption(q.reason)
+            st.page_link("app_pages/meaning.py", label="Resolve analytical meaning", icon=":material/schema:")
+    with st.expander("What the semantic planner allowed and held back"):
+        import pandas as pd
+
+        plans = [d for d in inv.semantic_decisions if d.get("operation") == "metric"]
+        if plans:
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "Metric": semantic_model.metric(d["metric"]).label,
+                            "Decision": d["status"],
+                            "Reason": d["reason"] or "Recorded definition satisfies this plan’s checks",
+                        }
+                        for d in plans
+                    ]
+                ),
+                hide_index=True,
+                alt="Metric eligibility decisions with explicit reasons",
+            )
+        st.page_link(
+            "app_pages/meaning.py", label="Define or run a reusable metric", icon=":material/functions:"
+        )
 view = st.segmented_control(
     "Explore",
     ["Overview", "Relationships", "Model lens"],
@@ -87,9 +128,12 @@ if view == "Model lens":
             target = st.selectbox(
                 "Model focus", targets, index=default, format_func=ds.label, key="model_target"
             )
+            from firstlook.semantic.model import get_model
+
+            declared_group = get_model(ds).model_group
             split = st.selectbox(
                 "Evaluation split",
-                ["random", "group", "time"],
+                ["group"] if declared_group else ["random", "group", "time"],
                 format_func=lambda x: {
                     "random": "Held-out rows",
                     "group": "Unseen groups",
@@ -99,7 +143,11 @@ if view == "Model lens":
             )
             split_field = None
             if split != "random":
-                options = [f.id for f in ds.record.fields if (split != "time" or f.role.value == "timestamp")]
+                options = (
+                    [declared_group]
+                    if declared_group
+                    else [f.id for f in ds.record.fields if (split != "time" or f.role.value == "timestamp")]
+                )
                 if options:
                     split_field = st.selectbox(
                         "Split field", options, format_func=ds.label, key="model_split_field"

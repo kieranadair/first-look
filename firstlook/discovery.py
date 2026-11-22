@@ -24,6 +24,7 @@ from firstlook.semantics import dimensions, measures
 
 SEED = 20261120
 OPERATIONS = {
+    "metric",
     "distribution",
     "ecdf",
     "frequency",
@@ -76,8 +77,26 @@ def plan_for(
 def validate_plan(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> None:
     if plan.context != ctx.id or ctx.dataset != dataset.record.fingerprint:
         raise ValueError("This plan belongs to an earlier analytical context.")
+    if ctx.semantics != dataset.context([], ctx.focus, ctx.assumption).semantics:
+        raise ValueError("Field meanings or semantic contract changed; recompute this plan.")
     if plan.operation not in OPERATIONS:
         raise ValueError("Unsupported analytical operation.")
+    if plan.operation == "metric":
+        from firstlook.semantic.model import get_model
+        from firstlook.semantic.planner import metric_fields
+
+        metric = get_model(dataset).metric(str(plan.params.get("metric", "")))
+        groups = plan.params.get("group_by", [])
+        if not isinstance(groups, list) or not all(isinstance(v, str) for v in groups):
+            raise ValueError("Grouping fields must be recorded field identities.")
+        expected: set[str] = set(metric_fields(dataset, metric)) | set(cast(list[str], groups))
+        if plan.params.get("time_field"):
+            expected.add(str(plan.params["time_field"]))
+        if not expected <= set(dataset.frame) or any(dataset.field(fid).excluded for fid in expected):
+            raise ValueError("A metric dependency is unknown or excluded.")
+        if set(plan.fields) != expected or len(plan.fields) != len(set(plan.fields)):
+            raise ValueError("Metric field dependencies do not match the recorded definition.")
+        return
     sizes = {
         "distribution": 1,
         "ecdf": 1,
@@ -96,6 +115,20 @@ def validate_plan(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) ->
     for fid in plan.fields:
         if dataset.field(fid).excluded:
             raise ValueError("An excluded field cannot enter an analysis.")
+    if dataset.record.semantic_model and plan.operation in {
+        "relationship",
+        "quantile_bin_summary",
+        "group_distribution",
+        "time",
+    }:
+        if any(
+            dataset.record.semantic_model.meaning(fid).kind in {"circular", "coordinate"}
+            for fid in plan.fields
+            if dataset.field(fid).role == Role.MEASURE
+        ):
+            raise ValueError(
+                "This operation assumes linear quantities. Circular and coordinate geometry require a supported domain summary in Meaning."
+            )
     numeric_ops = {"relationship", "distribution", "ecdf", "quantile_bin_summary"}
     if plan.operation in numeric_ops and any(dataset.field(f).role != Role.MEASURE for f in plan.fields):
         raise ValueError("This operation requires measures, not identifiers or codes.")
@@ -113,7 +146,15 @@ def validate_plan(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) ->
 
 def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple[ResultArtifact, Finding]:
     validate_plan(dataset, ctx, plan)
-    if not ctx.row_ids or not set(ctx.row_ids).issubset(dataset.frame.index):
+    if plan.operation == "metric":
+        from firstlook.semantic.engine import evaluate
+
+        return evaluate(dataset, ctx, plan)
+    if (
+        not ctx.row_ids
+        or len(ctx.row_ids) != len(set(ctx.row_ids))
+        or not set(ctx.row_ids).issubset(dataset.frame.index)
+    ):
         raise ValueError("Choose a nonempty valid subset of rows.")
     frame = dataset.frame.loc[ctx.row_ids]
     fields, op = plan.fields, plan.operation
@@ -122,6 +163,8 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
     metrics: dict = {}
     warnings: list[str] = []
     meta: dict = {"method_version": "1", "sampled": False}
+    if dataset.record.semantic_model:
+        meta["semantic_revision"] = dataset.record.semantic_model.revision
     n, missing = len(frame), 0
     template, x_label, y_label = "bar", "", "Count"
     observation = ""
@@ -408,6 +451,16 @@ class Investigation:
     decisions: list = field(default_factory=list)
     terra: dict = field(default_factory=dict)
     model_runs: list = field(default_factory=list)
+    semantic_decisions: list = field(default_factory=list)
+
+    def add_view(self, result: ResultArtifact, finding: Finding) -> None:
+        """Bound interactive working views; pins carry their own immutable snapshots."""
+        self.findings = ([finding] + [f for f in self.findings if f.id != finding.id])[:18]
+        self.results[result.id] = result
+        retained = {f.result_id for f in self.findings}
+        self.results = {rid: r for rid, r in self.results.items() if rid in retained}
+        retained_findings = {f.id for f in self.findings}
+        self.challenges = [c for c in self.challenges if c.parent_id in retained_findings]
 
 
 def discover(dataset: Dataset, context: AnalysisContext | None = None) -> Investigation:
@@ -506,6 +559,12 @@ def discover(dataset: Dataset, context: AnalysisContext | None = None) -> Invest
                 add("time", [f.id, value], f"How does recorded {dataset.label(value)} vary over time?", 0.7)
     if frame.isna().any().any():
         add("missingness", [], "Where is information missing?", 0.62)
+    from firstlook.semantic.planner import candidates
+
+    semantic_candidates, semantic_log = candidates(dataset, ctx)
+    proposed.extend(semantic_candidates)
+    inv.candidate_log.extend(semantic_log)
+    inv.semantic_decisions = semantic_log
     # Greedy redundancy penalty keeps the shortlist from becoming one family of repeated views.
     remaining = sorted(proposed, key=lambda v: -v[0])
     chosen_fields: list[str] = []
@@ -515,12 +574,15 @@ def discover(dataset: Dataset, context: AnalysisContext | None = None) -> Invest
             key=lambda v: (
                 -(
                     v[0]
-                    - 0.09 * sum(f in chosen_fields for f in v[1].fields)
+                    - (0.03 if v[1].operation == "metric" else 0.09)
+                    * sum(f in chosen_fields for f in v[1].fields)
                     - 0.16 * family_count.get(v[1].operation, 0)
                 )
             )
         )
         priority, plan = remaining.pop(0)
+        if plan.operation == "metric" and family_count.get("metric", 0) >= 3:
+            continue
         try:
             result, finding = analyze(dataset, ctx, plan)
         except ValueError as exc:

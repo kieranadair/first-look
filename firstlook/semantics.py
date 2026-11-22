@@ -61,6 +61,38 @@ def apply_semantics(dataset: Dataset, edited: pd.DataFrame) -> list[str]:
             changed.append(old.id)
         updated.append(new)
     dataset.record.fields = updated
+    if changed and dataset.record.semantic_model is not None:
+        from firstlook.semantic.model import get_model
+        from firstlook.semantic.profile import build_model, refresh_questions
+
+        model = get_model(dataset)
+        for meaning in model.meanings:
+            meaning.unit = dataset.field(meaning.field).unit
+            if meaning.field in changed:
+                meaning.confirmed = False
+        # Newly corrected identifier roles become eligible entity proposals.
+        fresh = build_model(dataset)
+        known = {tuple(e.keys) for e in model.entities}
+        model.entities = (model.entities + [e for e in fresh.entities if tuple(e.keys) not in known])[:12]
+        entity_ids = {e.id for e in model.entities}
+        additions = [m for m in fresh.metrics if not m.entity or m.entity in entity_ids]
+        metric_ids = {m.id for m in model.metrics} | {m.id for m in additions if m.aggregation != "ratio"}
+        additions = [
+            m for m in additions if m.aggregation != "ratio" or {m.numerator, m.denominator} <= metric_ids
+        ]
+        model.metrics = (model.metrics + [m for m in additions if m.id not in {v.id for v in model.metrics}])[
+            :160
+        ]
+        model.time_policies = [t for t in model.time_policies if dataset.field(t.field).role == Role.TIME]
+        model.time_policies += [
+            t for t in fresh.time_policies if t.id not in {v.id for v in model.time_policies}
+        ]
+        time_ids = {t.id for t in model.time_policies}
+        for metric in model.metrics:
+            if metric.time_policy and metric.time_policy not in time_ids:
+                metric.time_policy = None
+        model.assertions = fresh.assertions + [a for a in model.assertions if a.origin == "human"][-200:]
+        refresh_questions(model, dataset)
     return changed
 
 

@@ -16,6 +16,7 @@ Treat visual impressions as hypotheses. Do not invent values, units, causal clai
 Do not infer that prediction is causality. Preserve contradictory and insufficient evidence.
 Do not write numerical claims in interpretation prose; measured values appear in the verified observations. You cannot execute code. Suggest a bounded check or abstain when none is useful.
 Interpretation is a model proposal, distinct from Python-computed observations."""
+SYSTEM += "\nRespect confirmed semantic grain, metric definitions, denominator scope, observation policies and predictor availability. Unconfirmed meanings are hypotheses, not permission. Visual reasoning may expose shapes or contradictions that a fast discrete decision model cannot infer; propose only supplied executable checks."
 
 
 class TerraProvider:
@@ -82,12 +83,14 @@ class TerraProvider:
 
     def question(self, dataset, question: str):
         from firstlook.questions import QuestionIntent
+        from firstlook.semantic.planner import semantic_packet
 
         return self._request(
             {
                 "question": question,
                 "fields": [{"id": f.id, "name": f.name, "role": f.role.value} for f in dataset.record.fields],
                 "task": "Map the question to one supported intent or return unsupported with a clarification.",
+                "semantic_contract": semantic_packet(dataset, 20),
             },
             [],
             QuestionIntent,
@@ -99,6 +102,7 @@ class TerraProvider:
                 "task": "Suggest at most twelve field-role clarifications or corrections. "
                 "These are unconfirmed hypotheses; prefer unknown and ask a clarification when meaning is uncertain. "
                 "Never invent a unit, business definition, or category level. Keep field IDs exact.",
+                "metadata_task": "You may also propose at most twelve quantity-kind, grain or model-group hypotheses using exact supplied identities. Prefer a focused human question to inventing business meaning. Units, coverage completeness and expected observation schedules cannot be established from values alone. Do not silently change confirmed declarations.",
                 "profile": packet,
             },
             [],

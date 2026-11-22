@@ -14,6 +14,7 @@ with st.sidebar:
     st.caption("Discover. Challenge. Preserve.")
 pages = [
     st.Page("app_pages/understand.py", title="Understand", icon=":material/table_chart:", default=True),
+    st.Page("app_pages/meaning.py", title="Meaning", icon=":material/schema:"),
     st.Page("app_pages/discover.py", title="Discover", icon=":material/query_stats:"),
     st.Page("app_pages/challenge.py", title="Challenge", icon=":material/compare_arrows:"),
     st.Page("app_pages/evidence.py", title="Evidence", icon=":material/bookmarks:"),
@@ -42,7 +43,7 @@ with st.sidebar:
         st.caption(
             "Local work makes no provider calls. External analysis requires your explicit dataset permission."
         )
-        st.caption("First Look 0.1 · Apache-2.0")
+        st.caption("First Look 0.2 · Apache-2.0")
 if ws.message:
     st.toast(ws.message)
     ws.message = ""

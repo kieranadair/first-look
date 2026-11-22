@@ -17,8 +17,10 @@ from firstlook.discovery import (
 )
 from firstlook.ingest import Dataset
 from firstlook.semantics import dimensions
+from firstlook.semantic.checks import LABELS as SEMANTIC_LABELS
 
 LABELS = {
+    **SEMANTIC_LABELS,
     "subgroup": "Compare recorded groups",
     "extremes": "Check extreme-value sensitivity",
     "rank": "Compare rank and linear association",
@@ -36,6 +38,10 @@ def eligible(dataset: Dataset, inv: Investigation, finding: Finding) -> list[str
     result = inv.results[finding.result_id]
     op = result.plan.operation
     choices = []
+    if op == "metric":
+        from firstlook.semantic.checks import eligible as semantic_eligible
+
+        return semantic_eligible(dataset, result)
     if op == "relationship":
         if dimensions(dataset):
             choices.append("subgroup")
@@ -68,6 +74,10 @@ def challenge(
             summary="This check is not applicable to the current view.",
         )
     original = inv.results[finding.result_id]
+    if original.plan.operation == "metric":
+        from firstlook.semantic.checks import check
+
+        return check(dataset, inv, finding, operation, group_field)
     ctx = inv.context
     frame = dataset.frame.loc[ctx.row_ids]
     fields = original.plan.fields
@@ -296,6 +306,8 @@ def original_chart(finding: Finding, result: ResultArtifact, template: Any, alt:
 
 
 def automatic_challenges(dataset: Dataset, inv: Investigation) -> None:
-    for f in inv.findings[:3]:
+    selected = list(inv.findings[:3])
+    selected += [f for f in inv.findings if f.family == "metric" and f not in selected][:2]
+    for f in selected:
         for op in eligible(dataset, inv, f)[:3]:
             inv.challenges.append(challenge(dataset, inv, f, op))

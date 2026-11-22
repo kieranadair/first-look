@@ -55,3 +55,42 @@ def test_context_change_invalidates_results_and_retains_evidence():
     ws.invalidate()
     assert ws.context().id != ctx and ws.investigation is None
     assert ws.pins and ws.pins[0]["context"]["row_ids"] == list(range(600))
+
+
+def test_meaning_workspace_confirm_define_and_run_metric():
+    from firstlook.contracts import Role
+    from firstlook.ingest import from_frame
+    import pandas as pd
+
+    df = pd.DataFrame(
+        {
+            "order_id": ["A", "A", "B", "C"],
+            "category": ["Office", "Home", "Office", "Home"],
+            "sales": [10.0, 30.0, 20.0, 40.0],
+        }
+    )
+    ws = Workspace()
+    ws.load(from_frame(df, "orders.csv", raw=df.to_csv(index=False).encode()))
+    ws.dataset.field("f002").role = Role.MEASURE
+    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "streamlit_app.py", default_timeout=30)
+    app.session_state["workspace"] = ws
+    app.run()
+    app.switch_page("app_pages/meaning.py").run()
+    assert not app.exception
+    assert [t.label for t in app.tabs] == ["Decisions", "Metrics", "Structure & time", "Contract"]
+    quantity = next(s for s in app.selectbox if s.label == "What kind of quantity?")
+    quantity.select("flow")
+    next(b for b in app.button if b.label == "Confirm quantity meaning").click().run()
+    assert not app.exception
+    contract = app.session_state["workspace"].dataset.record.semantic_model
+    assert contract.meaning("f002").confirmed
+    app.selectbox(key="metric_existing").select("m_total_f002").run()
+    app.button(key="confirm_existing_metric").click().run()
+    assert not app.exception
+    app.multiselect(key="metric_groups").set_value(["f001"]).run()
+    app.button(key="compute_metric").click().run()
+    assert not app.exception
+    inv = app.session_state["workspace"].investigation
+    assert inv.findings[0].family == "metric"
+    assert sum(r["value"] for r in inv.results[inv.findings[0].result_id].records) == 100
+    assert any(c.operation == "semantic_reconciliation" for c in inv.challenges)

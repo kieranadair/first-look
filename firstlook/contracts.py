@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
+from firstlook.semantic_contracts import SemanticModel, MetadataProposal
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 
@@ -76,6 +77,7 @@ class DatasetRecord(Contract):
     source: str = "Uploaded file"
     description: str = ""
     parser: dict[str, JsonValue] = Field(default_factory=dict)
+    semantic_model: SemanticModel | None = None
 
 
 class AnalysisContext(Contract):
@@ -211,6 +213,10 @@ class HypothesisProposal(Contract):
         "missingness",
         "quantile_bin_summary",
         "residual_spread_by_bin",
+        "semantic_reconciliation",
+        "semantic_unit",
+        "semantic_denominator",
+        "semantic_gaps",
         "none",
     ]
     finding_id: str
@@ -232,6 +238,7 @@ class SemanticSuggestion(Contract):
 
 
 class SemanticReview(Contract):
+    metadata_proposals: list[MetadataProposal] = Field(default_factory=list, max_length=12)
     suggestions: list[SemanticSuggestion] = Field(default_factory=list, max_length=12)
     dataset_note: str = Field(default="", max_length=1000)
 

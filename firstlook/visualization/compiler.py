@@ -164,13 +164,13 @@ def compile_chart(spec: ChartSpec, result: ResultArtifact, dark: bool = False) -
             }
         )
         if spec.template == "bar":
-            x_axis["min"] = min(0, min(float(r["value"]) for r in rows))
+            x_axis["min"] = min(0, min(float(r["value"]) for r in rows if r["value"] is not None))
             series[0]["barMaxWidth"] = 26
             options["grid"]["left"] = 130
         else:
             series[0]["symbolSize"] = 13
-            x_axis["min"] = min(-1, min(float(r["value"]) for r in rows))
-            x_axis["max"] = max(1, max(float(r["value"]) for r in rows))
+            x_axis["min"] = min(-1, min(float(r["value"]) for r in rows if r["value"] is not None))
+            x_axis["max"] = max(1, max(float(r["value"]) for r in rows if r["value"] is not None))
     elif spec.template == "histogram":
         install(rows, "bar", {"x": "x", "y": "value", "tooltip": ["label", "value"]}, color=PALETTE[0])
         series[0]["barCategoryGap"] = "4%"
@@ -193,6 +193,10 @@ def compile_chart(spec: ChartSpec, result: ResultArtifact, dark: bool = False) -
         series[0]["connectNulls"] = False
         series[0]["symbolSize"] = 6
         series[0]["lineStyle"] = {"width": 2.5}
+        if result.plan.operation == "metric":
+            series[0]["encode"]["tooltip"] = ["x", "value", "n", "synthetic", "complete"]
+            if any(r.get("synthetic") for r in rows):
+                series[0]["lineStyle"] = {"width": 2.5, "type": "dashed"}
         if spec.template == "ecdf":
             series[0]["step"] = "end"
     elif spec.template == "heatmap":

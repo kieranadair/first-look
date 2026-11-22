@@ -1,14 +1,179 @@
 {
   "schema_version": 1,
   "rules": {
-    "VALID-01": {"name":"Match the analytical task to field meaning", "requirement":"A finite operation accepts only its declared semantic roles and complete distinct fields.","evidence":"R02, R06","source":"https://idl.uw.edu/papers/draco", "tests":["test_identifier_rejected_as_measure","test_semantic_transaction_and_context"]},
-    "SOURCE-01": {"name":"Keep the marks attached to their evidence", "requirement":"Chart, observation, table and replay consume the same result artifact; selection uses exact series/index mappings.","evidence":"R08, R17","source":"https://idl.uw.edu/papers/voyager2", "tests":["test_selection_maps_original_rows","test_export_import_and_recompute","test_fresh_process_cli_recompute"]},
-    "SUPPORT-01": {"name":"Expose support and missing information", "requirement":"Show the recorded support, missing values, sample status and omitted groups. Group comparisons need declared minimum support.","evidence":"R03, R09","source":"https://mucollective.northwestern.edu/files/2020-effects-aggregation-choices.pdf", "tests":["test_numerical_oracle","test_reversal_challenge"]},
-    "SCALE-01": {"name":"Use a scale appropriate to the comparison", "requirement":"Magnitude bars include zero; log ordinates require positive values; proportions use a declared domain; temporal gaps stay missing.","evidence":"R01, R03, R04","source":"https://arxiv.org/abs/1907.02035", "tests":["test_chart_hard_constraints","test_template_contracts"]},
-    "ORDER-01": {"name":"Preserve meaningful category order", "requirement":"Declared ordinal order takes precedence over a frequency ranking.","evidence":"R02, R04","source":"https://www.perceptualedge.com/library.php", "tests":["test_ordinal_order"]},
-    "AGG-01": {"name":"Show what a summary leaves out", "requirement":"Means are paired with support or distribution views. Bin and period comparisons are diagnostic views, not automatic robustness verdicts.","evidence":"R03, R04","source":"https://mucollective.northwestern.edu/files/2020-effects-aggregation-choices.pdf", "tests":["test_association_checks","test_cumulative_distribution_exact_and_monotone"]},
-    "MODEL-01": {"name":"Evaluate on held-out rows", "requirement":"Train-only preprocessing, fixed baselines, explicit memberships and source-linked errors precede any model-derived finding. Prediction does not establish causality.","evidence":"R10, R12","source":"https://doi.org/10.1038/s41586-024-08328-6", "tests":["test_split_memberships","test_baseline_is_real_and_held_out","test_residual_bins_are_defined_on_training_and_evaluated_on_holdout"]},
-    "HYPOTHESIS-01": {"name":"Compute before interpreting a visual hypothesis", "requirement":"A model may propose an eligible check or abstain. Python executes it; generated prose remains labeled interpretation and cannot add measured quantities.","evidence":"R06, Terra integration","source":"https://aclanthology.org/2023.findings-acl.660/", "tests":["test_proposal_fields_and_operations_are_constrained","test_generated_numerical_claim_is_not_published_as_fact"]}
+    "VALID-01": {
+      "name": "Match the analytical task to field meaning",
+      "requirement": "A finite operation accepts only its declared semantic roles and complete distinct fields.",
+      "evidence": "R02, R06",
+      "source": "https://idl.uw.edu/papers/draco",
+      "tests": [
+        "test_identifier_rejected_as_measure",
+        "test_semantic_transaction_and_context"
+      ]
+    },
+    "SOURCE-01": {
+      "name": "Keep the marks attached to their evidence",
+      "requirement": "Chart, observation, table and replay consume the same result artifact; selection uses exact series/index mappings.",
+      "evidence": "R08, R17",
+      "source": "https://idl.uw.edu/papers/voyager2",
+      "tests": [
+        "test_selection_maps_original_rows",
+        "test_export_import_and_recompute",
+        "test_fresh_process_cli_recompute"
+      ]
+    },
+    "SUPPORT-01": {
+      "name": "Expose support and missing information",
+      "requirement": "Show the recorded support, missing values, sample status and omitted groups. Group comparisons need declared minimum support.",
+      "evidence": "R03, R09",
+      "source": "https://mucollective.northwestern.edu/files/2020-effects-aggregation-choices.pdf",
+      "tests": [
+        "test_numerical_oracle",
+        "test_reversal_challenge"
+      ]
+    },
+    "SCALE-01": {
+      "name": "Use a scale appropriate to the comparison",
+      "requirement": "Magnitude bars include zero; log ordinates require positive values; proportions use a declared domain; temporal gaps stay missing.",
+      "evidence": "R01, R03, R04",
+      "source": "https://arxiv.org/abs/1907.02035",
+      "tests": [
+        "test_chart_hard_constraints",
+        "test_template_contracts"
+      ]
+    },
+    "ORDER-01": {
+      "name": "Preserve meaningful category order",
+      "requirement": "Declared ordinal order takes precedence over a frequency ranking.",
+      "evidence": "R02, R04",
+      "source": "https://www.perceptualedge.com/library.php",
+      "tests": [
+        "test_ordinal_order"
+      ]
+    },
+    "AGG-01": {
+      "name": "Show what a summary leaves out",
+      "requirement": "Means are paired with support or distribution views. Bin and period comparisons are diagnostic views, not automatic robustness verdicts.",
+      "evidence": "R03, R04",
+      "source": "https://mucollective.northwestern.edu/files/2020-effects-aggregation-choices.pdf",
+      "tests": [
+        "test_association_checks",
+        "test_cumulative_distribution_exact_and_monotone"
+      ]
+    },
+    "MODEL-01": {
+      "name": "Evaluate on held-out rows",
+      "requirement": "Train-only preprocessing, fixed baselines, explicit memberships and source-linked errors precede any model-derived finding. Prediction does not establish causality.",
+      "evidence": "R10, R12",
+      "source": "https://doi.org/10.1038/s41586-024-08328-6",
+      "tests": [
+        "test_split_memberships",
+        "test_baseline_is_real_and_held_out",
+        "test_residual_bins_are_defined_on_training_and_evaluated_on_holdout"
+      ]
+    },
+    "HYPOTHESIS-01": {
+      "name": "Compute before interpreting a visual hypothesis",
+      "requirement": "A model may propose an eligible check or abstain. Python executes it; generated prose remains labeled interpretation and cannot add measured quantities.",
+      "evidence": "R06, Terra integration",
+      "source": "https://aclanthology.org/2023.findings-acl.660/",
+      "tests": [
+        "test_proposal_fields_and_operations_are_constrained",
+        "test_generated_numerical_claim_is_not_published_as_fact"
+      ]
+    },
+    "SEM-VALID": {
+      "name": "Make semantic eligibility executable",
+      "requirement": "Metric field dependencies, role permissions and finite parameters must match their typed definition.",
+      "evidence": "Draco; semantic-contract.md",
+      "source": "https://doi.org/10.1109/TVCG.2018.2865240",
+      "tests": [
+        "test_quantities_are_proposals_and_sums_require_a_declared_definition",
+        "test_unknown_meaning_and_excluded_identity_cannot_authorize_metrics"
+      ]
+    },
+    "SEM-GRAIN": {
+      "name": "Declare the analytical unit",
+      "requirement": "Recorded rows, distinct entities and repeated entity-valued amounts require different definitions.",
+      "evidence": "Kimball; Gray; semantic-contract.md",
+      "source": "https://www.kimballgroup.com/2008/11/fact-tables/",
+      "tests": [
+        "test_row_mean_and_average_order_are_distinct_and_challenged",
+        "test_repeated_order_amount_requires_entity_grain_and_attribution"
+      ]
+    },
+    "SEM-AGG": {
+      "name": "Recompose from valid components",
+      "requirement": "Recompute ratios, weighted means, Other and temporal aggregates from their recorded components. Do not sum rates or daily stocks.",
+      "evidence": "Gray; dbt; semantic-contract.md",
+      "source": "https://research.ibm.com/publications/data-cube-a-relational-aggregation-operator-generalizing-group-by-cross-tab-and-sub-totals",
+      "tests": [
+        "test_ratio_uses_sum_components_instead_of_average_ratios",
+        "test_last_snapshot_is_recomputed_per_period_not_sum_of_daily_stocks",
+        "test_entity_values_must_be_constant_and_other_recomposes_allocation"
+      ]
+    },
+    "SEM-DENOM": {
+      "name": "Check membership before claiming composition",
+      "requirement": "The denominator population, missing identity and overlapping membership must be explicit; incidence may exceed a complete composition.",
+      "evidence": "Lenz & Shoshani; semantic-contract.md",
+      "source": "https://www.sigmod.org/publications/dblp/db/conf/ssdbm/LenzS97.html",
+      "tests": [
+        "test_overlapping_entity_incidence_does_not_become_composition",
+        "test_partition_sales_share_closes_and_preserves_source_membership",
+        "test_zero_denominator_group_stays_undefined_without_erasing_other_groups"
+      ]
+    },
+    "SEM-MEANING": {
+      "name": "Separate proposal from declaration",
+      "requirement": "Observed values and names can propose meanings; only confirmed operational definitions authorize conditional business summaries.",
+      "evidence": "Summarizability; dimensional modeling; semantic-contract.md",
+      "source": "https://www.kimballgroup.com/2008/11/fact-tables/",
+      "tests": [
+        "test_quantities_are_proposals_and_sums_require_a_declared_definition",
+        "test_jev_receives_semantics_and_only_prioritizes_unanswered_decisions"
+      ]
+    },
+    "SEM-SCOPE": {
+      "name": "Scope evidence to its contract and population",
+      "requirement": "Semantic revisions invalidate dependent work. Pins and replay retain the original definition and source memberships.",
+      "evidence": "Executable engineering contract; semantic-contract.md",
+      "source": "https://idl.uw.edu/papers/voyager2",
+      "tests": [
+        "test_semantic_context_changes_invalidate_old_plans_and_pins_keep_definition",
+        "test_semantic_evidence_roundtrip_and_deterministic_checks_replay"
+      ]
+    },
+    "SEM-TIME": {
+      "name": "Model the observation process",
+      "requirement": "Missing observations are unknown until a compatible schedule, process, coverage and bounded fill policy have been declared.",
+      "evidence": "Wang, Cook & Hyndman; semantic-contract.md",
+      "source": "https://doi.org/10.1080/10618600.2019.1695624",
+      "tests": [
+        "test_missing_event_day_is_unknown_until_complete_recording_is_declared",
+        "test_irregular_counter_intervals_are_not_zero_daily_consumption",
+        "test_contract_coverage_is_not_reused_for_an_arbitrary_row_selection"
+      ]
+    },
+    "SEM-UNIT": {
+      "name": "Validate transformation domain and origin",
+      "requirement": "Transformations follow aggregation and require permission, a valid numerical domain and a compatible reference origin.",
+      "evidence": "Pint measurement practice; semantic-contract.md",
+      "source": "https://pint.readthedocs.io/en/0.25.2/user/nonmult.html",
+      "tests": [
+        "test_offset_units_and_unknown_units_do_not_enable_log",
+        "test_transform_occurs_after_aggregation_and_rejects_nonpositive_log"
+      ]
+    },
+    "SEM-MODEL": {
+      "name": "Match validation to declared generalization",
+      "requirement": "Respect repeated-entity holdout and prediction-time availability for every predictive provider.",
+      "evidence": "Roberts et al.; semantic-contract.md",
+      "source": "https://doi.org/10.1111/ecog.02881",
+      "tests": [
+        "test_declared_model_group_and_prediction_availability_apply_to_every_model"
+      ]
+    }
   },
-  "scope":"The studies motivate conditional design patterns. Thresholds and budgets are engineering choices; this integrated app has not undergone a user study. Few's corpus is expert guidance, not one experimentally validated universal algorithm."
+  "scope": "The studies motivate conditional design patterns. Thresholds and budgets are engineering choices; this integrated app has not undergone a user study. Few's corpus is expert guidance, not one experimentally validated universal algorithm."
 }

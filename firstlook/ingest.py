@@ -45,6 +45,11 @@ class Dataset:
                     "fields": [f.model_dump() for f in self.record.fields],
                     "description": self.record.description,
                     "parser": self.record.parser,
+                    **(
+                        {"contract": self.record.semantic_model.revision}
+                        if self.record.semantic_model
+                        else {}
+                    ),
                 }
             ),
             row_ids=list(self.frame.index) if rows is None else rows,
@@ -139,7 +144,7 @@ def from_frame(
         )
     source_bytes = raw if raw is not None else frame.to_csv(index=False).encode()
     fingerprint = hashlib.sha256(source_bytes).hexdigest()
-    return Dataset(
+    dataset = Dataset(
         DatasetRecord(
             fingerprint=fingerprint,
             name=name,
@@ -152,6 +157,11 @@ def from_frame(
         frame,
         raw,
     )
+
+    from firstlook.semantic.profile import build_model
+
+    dataset.record.semantic_model = build_model(dataset)
+    return dataset
 
 
 def load_table(

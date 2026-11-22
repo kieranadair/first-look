@@ -22,10 +22,14 @@ class QuestionIntent(Contract):
         "missingness",
         "quantile_bin_summary",
         "time",
+        "metric",
         "unsupported",
     ]
     fields: list[str] = Field(max_length=2)
     clarification: str = Field(default="", max_length=800)
+    metric_id: str | None = None
+    group_by: list[str] = Field(default_factory=list, max_length=2)
+    time_field: str | None = None
 
 
 def local_intent(dataset: Dataset, question: str) -> QuestionIntent:
@@ -44,6 +48,32 @@ def local_intent(dataset: Dataset, question: str) -> QuestionIntent:
     ]
     nums = [f for f in hits if f in measures(dataset)]
     cats = [f for f in hits if f in dimensions(dataset)]
+    from firstlook.semantic.model import get_model
+
+    named = [
+        m
+        for m in get_model(dataset).metrics
+        if m.label.casefold() in q or re.search(r"\b" + re.escape(m.id) + r"\b", q)
+    ]
+    if named:
+        metric = max(named, key=lambda m: len(m.label))
+        times = [f for f in hits if dataset.field(f).role.value == "timestamp"]
+        return QuestionIntent(
+            operation="metric",
+            fields=[],
+            metric_id=metric.id,
+            group_by=cats[:2] if not times else [],
+            time_field=times[0] if times else None,
+        )
+    if (
+        re.search(r"\b(total|sum|average|weighted|share|percentage|percent|per order|per customer)\b", q)
+        and hits
+    ):
+        return QuestionIntent(
+            operation="unsupported",
+            fields=[],
+            clarification="Choose or define a named metric in Meaning first. Totals, row averages, entity averages and shares need an explicit value grain and denominator. Use that metric's name in your question.",
+        )
     if "missing" in q:
         return QuestionIntent(operation="missingness", fields=[])
     if cats and nums:
@@ -75,6 +105,25 @@ def run_question(dataset: Dataset, inv: Investigation, question: str, terra=None
         intent = terra.question(dataset, question)
     if intent.operation == "unsupported":
         raise ValueError(intent.clarification or "This request is outside the supported analytical catalog.")
+    if intent.operation == "metric":
+        from firstlook.semantic.planner import metric_plan
+
+        if not intent.metric_id:
+            raise ValueError("Choose a recorded metric definition in Meaning.")
+        result, finding = analyze(
+            dataset,
+            inv.context,
+            metric_plan(
+                dataset,
+                inv.context,
+                intent.metric_id,
+                intent.group_by,
+                intent.time_field,
+                question=question.strip(),
+            ),
+        )
+        inv.add_view(result, finding)
+        return inv
     sizes = {
         "distribution": 1,
         "frequency": 1,
@@ -89,6 +138,5 @@ def run_question(dataset: Dataset, inv: Investigation, question: str, terra=None
     result, finding = analyze(
         dataset, inv.context, plan_for(inv.context, intent.operation, intent.fields, question.strip())
     )
-    inv.results[result.id] = result
-    inv.findings = [finding] + [f for f in inv.findings if f.id != finding.id]
+    inv.add_view(result, finding)
     return inv

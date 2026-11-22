@@ -76,6 +76,16 @@ if ws.dataset is None:
                     ws.load(load_example(key))
                     st.session_state.external_ok = False
                     st.rerun()
+    with st.container(border=True):
+        st.badge("NEW · EXECUTABLE MEANING", icon=":material/schema:")
+        st.subheader("Orders aren’t rows.")
+        st.markdown(
+            "One table can support several valid questions. Explore order averages, allocated totals, weighted prices and time gaps with their definitions already declared by the generator."
+        )
+        if st.button("Explore semantic example", key="example_semantic", icon=":material/arrow_forward:"):
+            ws.load(load_example("semantic"))
+            st.session_state.external_ok = False
+            st.rerun()
     with st.expander("More examples"):
         for key in ["bike", "null"]:
             if st.button(CATALOG[key][0], key="example_" + key, icon=f":material/{CATALOG[key][2]}:"):
@@ -108,6 +118,15 @@ grid.metric("Fields", p["columns"])
 grid.metric("Missing cells", f"{p['missing'] / max(p['cells'], 1):.1%}")
 grid.metric("Duplicate rows", f"{p['duplicates']:,}")
 st.caption(ds.record.source)
+with st.container(border=True):
+    from firstlook.semantic.model import get_model
+
+    semantic_model = get_model(ds)
+    st.markdown("**Go beyond field types.**")
+    st.caption(
+        f"{len(semantic_model.clarifications)} focused decisions · {len(semantic_model.metrics)} metric definitions · {len(semantic_model.relationships)} observed relationships. Define grain, quantities, denominators and time policies once."
+    )
+    st.page_link("app_pages/meaning.py", label="Review analytical meaning", icon=":material/schema:")
 with st.expander("What does this table represent?"):
     with st.form("dataset_context_form"):
         description = st.text_area(
@@ -209,6 +228,7 @@ if assumption != ws.assumption:
 st.checkbox(
     "Allow external analysis for this dataset",
     key="external_ok",
+    persist_state="session",
     help="Jev receives metadata and computed summaries. Terra receives field summaries, bounded plotted values and chart images. TabPFN receives the permitted training/test values. Nothing is sent until you request connected work.",
 )
 with st.expander("Optional second opinion on field meanings"):
