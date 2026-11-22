@@ -34,6 +34,7 @@ OPERATIONS = {
     "time",
     "missingness",
     "quantile_bin_summary",
+    "exploration",
 }
 
 
@@ -64,6 +65,7 @@ def correlations(frame: pd.DataFrame, x: str, y: str) -> dict:
 def plan_for(
     ctx: AnalysisContext, operation: str, fields: list[str], question: str, params: dict | None = None
 ) -> AnalysisPlan:
+    params = {"recipe_version": 2, **(params or {})}
     return AnalysisPlan(
         id=digest([ctx.id, operation, fields, params or {}]),
         operation=operation,
@@ -81,6 +83,14 @@ def validate_plan(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) ->
         raise ValueError("Field meanings or semantic contract changed; recompute this plan.")
     if plan.operation not in OPERATIONS:
         raise ValueError("Unsupported analytical operation.")
+    version = plan.params.get("recipe_version", 1)
+    if not isinstance(version, int) or isinstance(version, bool) or version not in {1, 2}:
+        raise ValueError("Unsupported calculation recipe version; inspect or migrate the recorded evidence.")
+    if plan.operation == "exploration":
+        from firstlook.exploration import validate_task
+
+        validate_task(dataset, ctx, plan)
+        return
     if plan.operation == "metric":
         from firstlook.semantic.model import get_model
         from firstlook.semantic.planner import metric_fields
@@ -146,6 +156,10 @@ def validate_plan(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) ->
 
 def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple[ResultArtifact, Finding]:
     validate_plan(dataset, ctx, plan)
+    if plan.operation == "exploration":
+        from firstlook.exploration import execute
+
+        return execute(dataset, ctx, plan)
     if plan.operation == "metric":
         from firstlook.semantic.engine import evaluate
 
@@ -162,7 +176,8 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
     records: list[dict] = []
     metrics: dict = {}
     warnings: list[str] = []
-    meta: dict = {"method_version": "1", "sampled": False}
+    modern = int(cast(Any, plan.params.get("recipe_version", 1))) >= 2
+    meta: dict = {"method_version": "2" if modern else "1", "sampled": False}
     if dataset.record.semantic_model:
         meta["semantic_revision"] = dataset.record.semantic_model.revision
     n, missing = len(frame), 0
@@ -177,14 +192,39 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
         if not n:
             raise ValueError("This field has no finite values.")
         bins = max(5, min(50, int(cast(Any, plan.params.get("bins", min(30, max(5, int(np.sqrt(n)))))))))
-        counts, edges = np.histogram(s, bins=bins)
+        if "edges" in plan.params:
+            edges = np.asarray(plan.params["edges"], dtype=float)
+            if (
+                len(edges) < 3
+                or len(edges) > 102
+                or not np.isfinite(edges).all()
+                or not np.all(np.diff(edges) > 0)
+                or edges[0] > s.min()
+                or edges[-1] < s.max()
+            ):
+                raise ValueError("Histogram edges must be finite, increasing and cover all values.")
+            counts, edges = np.histogram(s, bins=edges)
+        else:
+            counts, edges = np.histogram(s, bins=bins)
+        normalization = str(plan.params.get("normalization", "count"))
+        if normalization not in {"count", "proportion", "density"} or not np.allclose(
+            np.diff(edges), np.diff(edges)[0]
+        ):
+            raise ValueError(
+                "Use count, proportion or density with the supported equal-width histogram bins."
+            )
         for i, count in enumerate(counts):
             mask = (s >= edges[i]) & ((s <= edges[i + 1]) if i == len(counts) - 1 else (s < edges[i + 1]))
             records.append(
                 {
                     "label": f"{edges[i]:.3g}–{edges[i + 1]:.3g}",
                     "x": float((edges[i] + edges[i + 1]) / 2),
-                    "value": int(count),
+                    "value": int(count)
+                    if normalization == "count"
+                    else float(count / n)
+                    if normalization == "proportion"
+                    else float(count / (n * (edges[i + 1] - edges[i]))),
+                    **({"count": int(count)} if modern else {}),
                     "left": float(edges[i]),
                     "right": float(edges[i + 1]),
                     "row_ids": s.index[mask].tolist(),
@@ -202,6 +242,13 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
             }
         )
         template, x_label, y_label = "histogram", labels[0], "Recorded values"
+        if modern:
+            meta["normalization"] = normalization
+            y_label = {
+                "count": "Recorded row count",
+                "proportion": "Proportion per bin",
+                "density": "Density (area sums to one)",
+            }[normalization]
         observation = f"The median {labels[0]} is {number(metrics['median'])}; the middle half spans {number(metrics['q1'])} to {number(metrics['q3'])}."
         score = 0.38 + min(missing / max(len(frame), 1), 0.2)
     elif op == "ecdf":
@@ -210,9 +257,23 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
         if not n:
             raise ValueError("This field has no finite values.")
         unique = s.drop_duplicates()
-        # A bounded staircase retains exact cumulative proportions, including endpoints.
-        plotted = unique.iloc[np.unique(np.linspace(0, len(unique) - 1, min(1200, len(unique))).astype(int))]
         values = s.to_numpy()
+        if modern:
+            from firstlook.numerics import compressed_ecdf
+
+            locations, probabilities, error, _ = compressed_ecdf(values, cap=1198)
+            plotted = locations
+            meta.update(
+                ecdf_error=error,
+                ecdf_method="observed-value rank compression",
+                step="post",
+                endpoint_extension="0 below min; 1 at/above max",
+                selection_semantics="Recorded observations exactly at selected vertices; not cumulative membership",
+            )
+        else:
+            plotted = unique.iloc[
+                np.unique(np.linspace(0, len(unique) - 1, min(1200, len(unique))).astype(int))
+            ]
         records = [
             {
                 "x": float(value),
@@ -225,7 +286,9 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
         meta["sampled"] = len(plotted) < len(unique)
         if meta["sampled"]:
             warnings.append(
-                "The staircase uses at most 1,200 exact quantile locations; source rows between these locations are not selectable."
+                f"Display compressed to {len(plotted):,} observed locations. Maximum vertical CDF error is {error:.6g}; omitted values are not selectable. Statistics use all source values."
+                if modern
+                else "The staircase uses at most 1,200 exact quantile locations; source rows between these locations are not selectable."
             )
         metrics = {"median": float(s.median()), "distinct": len(unique)}
         observation = (
@@ -235,20 +298,32 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
         s = frame[fields[0]].dropna().astype(str)
         counts = s.value_counts()
         order = dataset.field(fields[0]).order
-        levels = [v for v in order if v in counts] if order else counts.head(12).index.tolist()
+        levels = (
+            list(cast(Any, plan.params["fixed_levels"]))
+            if plan.params.get("fixed_levels")
+            else [v for v in order if v in counts]
+            if order
+            else counts.head(12).index.tolist()
+        )
         if not len(counts):
             raise ValueError("No recorded categories.")
         for label in levels:
             records.append(
-                {"label": label, "value": int(counts[label]), "row_ids": s.index[s == label].tolist()}
+                {
+                    "label": label,
+                    "value": int(counts.get(label, 0)),
+                    "row_ids": s.index[s == label].tolist(),
+                    **({"key": digest([fields, label]), "other": False} if modern else {}),
+                }
             )
-        if len(levels) < len(counts):
+        if (~s.isin(levels)).any() or plan.params.get("fixed_remainder"):
             other = ~s.isin(levels)
             records.append(
                 {
                     "label": "Other recorded levels",
                     "value": int(other.sum()),
                     "row_ids": s.index[other].tolist(),
+                    **({"key": digest([fields, "synthetic-remainder"]), "other": True} if modern else {}),
                 }
             )
             warnings.append(f"The largest 12 levels cover {s.isin(levels).mean():.1%} of nonmissing values.")
@@ -273,6 +348,31 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
                 for i, row in plotted.iterrows()
             ]
             meta["plotted_rows"] = len(plotted)
+            if modern:
+                from firstlook.exploration_contracts import AnalysisScope
+
+                eligible = paired(frame, fields)
+                meta["analysis_scope"] = AnalysisScope(
+                    context=ctx.id,
+                    eligible_rows=len(eligible),
+                    statistical_rows=n,
+                    displayed_marks=len(plotted),
+                    missing_rows=missing,
+                    statistical_sample=len(valid) < len(eligible),
+                    display_sample=len(plotted) < len(eligible),
+                    seed=SEED,
+                    statistical_membership_hash=digest(valid.index.tolist()),
+                    display_membership_hash=digest(plotted.index.tolist()),
+                ).model_dump(mode="json")
+                meta["sampled"] = len(plotted) < len(eligible)
+                meta["full_pair_domains"] = {
+                    "x": [float(eligible[fields[0]].min()), float(eligible[fields[0]].max())],
+                    "y": [float(eligible[fields[1]].min()), float(eligible[fields[1]].max())],
+                }
+                if len(plotted) < len(eligible):
+                    warnings.append(
+                        f"Display uses {len(plotted):,} seeded points of {len(eligible):,} eligible pairs; statistics use {n:,}. Selecting points selects only their recorded rows."
+                    )
             template, x_label, y_label = "scatter", labels[0], labels[1]
             observation = f"Across {n:,} paired rows, Pearson r = {number(metrics['pearson'])} and Spearman ρ = {number(metrics['spearman'])}."
             score = 0.5 + 0.35 * abs(metrics["spearman"])
@@ -282,8 +382,23 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
                 q=max(3, min(6, int(cast(Any, plan.params.get("bins", 5))))),
                 duplicates="drop",
             )
-            for _, group in valid.groupby(bins, observed=True):
+            for interval, group in valid.groupby(bins, observed=True):
                 if len(group) < 20:
+                    if modern:
+                        records.append(
+                            {
+                                "x": float(group[fields[0]].median())
+                                if len(group)
+                                else float(cast(Any, interval).mid),
+                                "value": None,
+                                "q1": None,
+                                "q3": None,
+                                "n": len(group),
+                                "left": float(cast(Any, interval).left),
+                                "right": float(cast(Any, interval).right),
+                                "row_ids": [],
+                            }
+                        )
                     continue
                 records.append(
                     {
@@ -292,12 +407,29 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
                         "q1": float(group[fields[1]].quantile(0.25)),
                         "q3": float(group[fields[1]].quantile(0.75)),
                         "n": len(group),
+                        **(
+                            {
+                                "left": float(cast(Any, interval).left),
+                                "right": float(cast(Any, interval).right),
+                            }
+                            if modern
+                            else {}
+                        ),
                         "row_ids": group.index.tolist(),
                     }
                 )
-            if len(records) < 2:
+            if sum(r["value"] is not None for r in records) < 2:
                 raise ValueError("Not enough supported quantile bins.")
             template, x_label, y_label = "line", labels[0] + " (bin median)", labels[1] + " (median)"
+            if modern:
+                meta["conditional_spread"] = True
+                meta["selection_semantics"] = (
+                    "Retained statistical-sample members of a supported quantile bin; not every source record in the horizontal range"
+                )
+                y_label = labels[1] + " (median and middle half)"
+                meta["bin_policy"] = (
+                    "Quantile bins; linear quartile estimator; bins with fewer than 20 paired observations omitted; no connecting unsupported bins"
+                )
             observation = f"{len(records)} supported quantile bins show conditional medians; each bin retains its count and quartiles."
     elif op == "group_distribution":
         group_field, value_field = fields
@@ -346,19 +478,66 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
         score = 0.45 + min(float(eta), 0.5)
     elif op == "category_relationship":
         valid = frame[fields].dropna().astype(str)
-        if len(valid) < 30 or any(valid[f].nunique() > 8 for f in fields):
+        if len(valid) < (1 if modern else 30) or any(valid[f].nunique() > 8 for f in fields):
             raise ValueError("Use two dimensions with at most eight levels and 30 paired rows.")
         table = pd.crosstab(valid[fields[0]], valid[fields[1]])
         for x in table.index:
             for y in table.columns:
                 ids = valid.index[(valid[fields[0]] == x) & (valid[fields[1]] == y)].tolist()
-                records.append({"x": x, "y": y, "value": int(table.loc[x, y]), "row_ids": ids})
+                count = int(table.loc[x, y])
+                mode = str(plan.params.get("normalization", "count"))
+                if mode not in {"count", "whole", "within_x", "within_y", "residual"}:
+                    raise ValueError("Choose count, whole-table, within-X, within-Y or descriptive residual.")
+                denominator = (
+                    len(valid)
+                    if mode == "whole"
+                    else int(table.loc[x].sum())
+                    if mode == "within_x"
+                    else int(table[y].sum())
+                    if mode == "within_y"
+                    else 1
+                )
+                expected = float(table.loc[x].sum() * table[y].sum() / len(valid))
+                value = (
+                    (count - expected) / np.sqrt(expected)
+                    if mode == "residual" and expected > 0
+                    else count / denominator
+                )
+                records.append(
+                    {
+                        "x": x,
+                        "y": y,
+                        "value": value if modern else count,
+                        "row_ids": ids,
+                        **(
+                            {
+                                "count": count,
+                                "denominator": denominator,
+                                "expected": expected,
+                                "key": digest([fields, x, y]),
+                            }
+                            if modern
+                            else {}
+                        ),
+                    }
+                )
         n, missing = len(valid), len(frame) - len(valid)
         template, x_label, y_label = "heatmap", labels[0], labels[1]
         observation = (
             f"{n:,} paired rows are shown as joint counts; a dark cell is a count, not a conditional rate."
         )
         metrics = {"cells": table.size}
+        if modern:
+            meta.update(
+                normalization=mode,
+                denominator_population="Complete recorded category pairs only; missing pairs excluded",
+                descriptive_only=True,
+            )
+            observation = f"{n:,} complete category pairs; mode {mode}. Within-X conditions on {labels[0]}; within-Y conditions on {labels[1]}. Missing pairs are reported separately."
+            if mode == "residual":
+                warnings.append(
+                    "Descriptive standardized independence residuals, not significance tests. Repeated entities and sparse cells can invalidate inferential interpretations."
+                )
     elif op == "missingness":
         for f in dataset.record.fields:
             ids = frame.index[frame[f.id].isna()].tolist()
@@ -425,6 +604,8 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
         zero_baseline=template in {"bar", "histogram"},
         alt=observation,
         rules=["VALID-01", "SOURCE-01", "SUPPORT-01", "SCALE-01"]
+        + (["EXP-SCOPE"] if modern and op in {"ecdf", "relationship"} else [])
+        + (["EXP-SHAPE"] if modern and op == "quantile_bin_summary" else [])
         + (["ORDER-01"] if op == "frequency" else [])
         + (["AGG-01"] if op in {"group_distribution", "time", "quantile_bin_summary"} else []),
     )
@@ -438,6 +619,12 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
         score=score,
         limitations=["Descriptive evidence from the recorded rows; no causal conclusion."] + warnings,
     )
+    if modern:
+        from firstlook.exploration_contracts import ExplorationTask
+
+        result.metadata["task"] = ExplorationTask(
+            family=family, question=plan.question, fields=fields, base_context=ctx.id, operation=op
+        ).model_dump(mode="json")
     return result, finding
 
 
@@ -452,6 +639,8 @@ class Investigation:
     terra: dict = field(default_factory=dict)
     model_runs: list = field(default_factory=list)
     semantic_decisions: list = field(default_factory=list)
+    coverage: list[dict] = field(default_factory=list)
+    related_views: dict[str, dict] = field(default_factory=dict)
 
     def add_view(self, result: ResultArtifact, finding: Finding) -> None:
         """Bound interactive working views; pins carry their own immutable snapshots."""
@@ -461,17 +650,23 @@ class Investigation:
         self.results = {rid: r for rid, r in self.results.items() if rid in retained}
         retained_findings = {f.id for f in self.findings}
         self.challenges = [c for c in self.challenges if c.parent_id in retained_findings]
+        self.related_views = {
+            k: v
+            for k, v in self.related_views.items()
+            if k in self.results and v["companion"] in self.results
+        }
 
 
 def discover(dataset: Dataset, context: AnalysisContext | None = None) -> Investigation:
     ctx = context or dataset.context()
     inv = Investigation(ctx)
     frame = dataset.frame.loc[ctx.row_ids]
-    nums, cats = measures(dataset)[:40], dimensions(dataset)[:10]
+    nums = sorted(measures(dataset), key=lambda f: f != ctx.focus)[:40]
+    cats = sorted(dimensions(dataset), key=lambda f: f != ctx.focus)[:10]
     proposed: list[tuple[float, AnalysisPlan]] = []
 
-    def add(op: str, fields: list[str], title: str, priority: float) -> None:
-        plan = plan_for(ctx, op, fields, title)
+    def add(op: str, fields: list[str], title: str, priority: float, params=None) -> None:
+        plan = plan_for(ctx, op, fields, title, params)
         proposed.append((priority + (0.15 if ctx.focus in fields else 0), plan))
         inv.candidate_log.append(
             {"operation": op, "fields": fields, "plan": plan.id, "stage": "candidate", "priority": priority}
@@ -507,13 +702,18 @@ def discover(dataset: Dataset, context: AnalysisContext | None = None) -> Invest
                 bins = pd.qcut(valid[bx], q=5, duplicates="drop")
                 medians = valid.groupby(bins, observed=True)[by].agg(["median", "count"])
                 medians = medians[medians["count"] >= 20]
+                quartiles = valid.groupby(bins, observed=True)[by].quantile(np.array([0.25, 0.75])).unstack()
+                widths = (quartiles[0.75] - quartiles[0.25]).loc[medians.index]
+                spread_change = float(widths.max() - widths.min()) / max(
+                    float(valid[by].quantile(0.75) - valid[by].quantile(0.25)), 1e-12
+                )
                 iqr = float(valid[by].quantile(0.75) - valid[by].quantile(0.25))
                 spread = float(medians["median"].max() - medians["median"].min()) / max(iqr, 1e-12)
-                if len(medians) >= 3 and spread >= 0.5 and magnitude < 0.5:
+                if len(medians) >= 3 and ((spread >= 0.5 and magnitude < 0.5) or spread_change >= 0.5):
                     add(
                         "quantile_bin_summary",
                         [bx, by],
-                        f"Could {dataset.label(bx)} and {dataset.label(by)} have a conditional shape?",
+                        f"How do center and spread of {dataset.label(by)} vary with {dataset.label(bx)}?",
                         0.72,
                     )
                     add(
@@ -545,6 +745,24 @@ def discover(dataset: Dataset, context: AnalysisContext | None = None) -> Invest
                 f"Does {dataset.label(value)} differ by {dataset.label(f)}?",
                 0.45 + min(eta, 0.5),
             )
+            if cats.index(f) < 3 and nums.index(value) < 4:
+                spread_by_group = valid.groupby(f)[value].std().dropna()
+                spread_by_group = spread_by_group.loc[
+                    counts[counts >= 20].index.intersection(spread_by_group.index)
+                ]
+                if len(spread_by_group) >= 2 and spread_by_group.max() > 2 * max(
+                    float(spread_by_group.min()), 1e-12
+                ):
+                    add(
+                        "exploration",
+                        [f, value],
+                        f"How do the distributions of {dataset.label(value)} differ by {dataset.label(f)}?",
+                        0.74,
+                        {
+                            "recipe": "group_shape",
+                            "levels": [str(spread_by_group.idxmin()), str(spread_by_group.idxmax())],
+                        },
+                    )
     for x, y in list(combinations(cats, 2))[:20]:
         if frame[x].nunique() <= 8 and frame[y].nunique() <= 8:
             add(
@@ -595,4 +813,7 @@ def discover(dataset: Dataset, context: AnalysisContext | None = None) -> Invest
         inv.results[result.id] = result
         chosen_fields.extend(plan.fields)
         family_count[plan.operation] = family_count.get(plan.operation, 0) + 1
+    from firstlook.exploration import perspective_coverage
+
+    inv.coverage = perspective_coverage(dataset, inv)
     return inv

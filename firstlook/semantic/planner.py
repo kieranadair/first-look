@@ -67,12 +67,20 @@ def semantic_packet(dataset, limit=16):
 
 def candidates(dataset, ctx):
     model = get_model(dataset)
-    dims = [f for f in dimensions(dataset) if 2 <= dataset.frame.loc[ctx.row_ids, f].nunique() <= 30][:2]
+    dims = sorted(
+        [f for f in dimensions(dataset) if 2 <= dataset.frame.loc[ctx.row_ids, f].nunique() <= 30],
+        key=lambda f: f != ctx.focus,
+    )[:2]
     proposed = []
     log = []
     # Explicit authored definitions get first consideration, not arbitrary numeric sums.
     selected = sorted(
-        model.metrics, key=lambda m: (not (m.confirmed and m.aggregation not in {"count_rows", "mean"}), m.id)
+        model.metrics,
+        key=lambda m: (
+            ctx.focus not in metric_fields(dataset, m),
+            not (m.confirmed and m.aggregation not in {"count_rows", "mean"}),
+            m.id,
+        ),
     )[:16]
     for metric in selected:
         if metric.aggregation == "count_distinct" and metric.entity and model.entity(metric.entity).unique:

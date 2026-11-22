@@ -389,6 +389,18 @@ with metrics_tab:
         key="metric_period",
     )
     groups = [] if time_field else groups
+    ranking = st.selectbox(
+        "Category order",
+        ["metric_desc", "metric_asc", "natural", "frequency"],
+        format_func=lambda v: {
+            "metric_desc": "Metric value, highest first",
+            "metric_asc": "Metric value, lowest first",
+            "natural": "Declared / natural order",
+            "frequency": "Recorded row frequency",
+        }[v],
+        disabled=not groups,
+        key="metric_ranking",
+    )
     readiness = decision(ds, current, groups, time_field, ctx.row_ids)
     for message in readiness.reasons + readiness.requirements:
         st.warning(message)
@@ -400,7 +412,9 @@ with metrics_tab:
         key="compute_metric",
     ):
         try:
-            result, finding = analyze(ds, ctx, metric_plan(ds, ctx, current.id, groups, time_field, period))
+            result, finding = analyze(
+                ds, ctx, metric_plan(ds, ctx, current.id, groups, time_field, period, ranking=ranking)
+            )
             inv = ws.investigation or Investigation(ctx)
             inv.add_view(result, finding)
             from firstlook.challenges import challenge, eligible

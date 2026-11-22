@@ -20,10 +20,14 @@ STATUS = {
 }
 
 
-def page_header(title: str, subtitle: str):
-    st.caption("FIRST LOOK  /  VISUAL INVESTIGATION")
-    st.title(title)
-    st.markdown(subtitle)
+def page_header(title: str, subtitle: str, compact: bool = False):
+    if compact:
+        st.header(title)
+        st.caption(subtitle)
+    else:
+        st.caption("FIRST LOOK  /  VISUAL INVESTIGATION")
+        st.title(title)
+        st.markdown(subtitle)
     ws = workspace()
     if ws.dataset:
         context = f"{len(ws.context().row_ids):,} active rows" if len(ws.dataset.frame) else "Saved evidence"
@@ -32,16 +36,25 @@ def page_header(title: str, subtitle: str):
             + ("  ·  Recorded replay" if ws.replay else "")
         )
         if ws.rows is not None and not ws.replay:
-            if st.button("Reset selection", icon=":material/filter_alt_off:", key="global_reset"):
-                ws.rows = None
-                ws.invalidate()
+            if st.button(
+                "Return to reference" if ws.return_state else "Reset selection",
+                icon=":material/filter_alt_off:",
+                key="global_reset",
+            ):
+                if ws.return_state:
+                    ws.return_to_anchor()
+                else:
+                    ws.rows = None
+                    ws.invalidate()
                 st.rerun()
 
 
 def render_chart(
     finding: Finding, inv: Investigation, suffix: str = "", selection: bool = False, height: int = 310
 ):
-    result = inv.results[finding.result_id]
+    from firstlook.exploration import display_result
+
+    result = display_result(inv, finding.result_id)
     return chart_view(finding.chart, result, suffix or finding.id, selection, height)
 
 
@@ -62,12 +75,44 @@ def chart_view(spec, result, key: str, selection: bool = False, height: int = 31
         active_brush = bool(event.get("selection", {}).get("areas"))
         if chosen:
             st.caption(
-                f"{len(chosen):,} source rows selected. Applying this subset creates a new analytical context."
+                f"{len(chosen):,} displayed source members selected. Preview a cohort to compare it while retaining this reference."
             )
-            if st.button("Apply selected rows", key="apply_" + key, icon=":material/filter_alt:"):
-                ws.rows = chosen
-                ws.invalidate()
-                st.rerun()
+            left, right = st.columns(2)
+            with left:
+                if st.button("Compare selected rows", key="compare_" + key, icon=":material/compare_arrows:"):
+                    from firstlook.comparison import preview
+
+                    if (
+                        result.plan.operation == "metric"
+                        and result.metadata.get("definition", {}).get("aggregation") == "delta"
+                    ):
+                        st.warning(
+                            "Counter marks depend on interval endpoints. Endpoint unions cannot define a safe cohort; select recorded rows or an entity predicate in Compare."
+                        )
+                    else:
+                        preview(
+                            ws,
+                            chosen,
+                            result.id,
+                            compiled.mapping_hash,
+                            scope=result.metadata.get("selection_semantics", "Displayed mark members only"),
+                        )
+                        st.switch_page("app_pages/compare.py")
+            with right:
+                if st.button("Apply selected rows", key="apply_" + key, icon=":material/filter_alt:"):
+                    from firstlook.comparison import preview
+
+                    if (
+                        result.plan.operation == "metric"
+                        and result.metadata.get("definition", {}).get("aggregation") == "delta"
+                    ):
+                        st.warning(
+                            "An endpoint-row union can create unselected counter intervals. Use a recorded-row predicate in Compare."
+                        )
+                    else:
+                        preview(ws, chosen, result.id, compiled.mapping_hash)
+                        ws.begin_filtered()
+                        st.rerun()
             with st.expander("Preview selected records"):
                 table = ws.dataset.frame.loc[chosen].rename(
                     columns={f.id: f.name for f in ws.dataset.record.fields}
@@ -92,13 +137,11 @@ def finding_card(finding: Finding, inv: Investigation, lead: bool = False):
         st.subheader(finding.title)
         st.markdown(finding.observation)
         render_chart(finding, inv, height=360 if lead else 290)
-        st.caption(
-            f"{result.support:,} supporting rows  ·  {result.missing:,} missing"
-            + ("  ·  Sampled" if result.metadata.get("sampled") else "")
-        )
+        st.caption(scope_caption(result))
         with st.container(horizontal=True, gap="xsmall"):
             if st.button("Inspect", key="inspect_" + finding.id, icon=":material/open_in_full:"):
                 ws.inspect_id = finding.id
+                ws.opened.add(finding.id)
                 st.rerun()
             if st.button("Challenge", key="challenge_" + finding.id, icon=":material/compare_arrows:"):
                 ws.challenge_id = finding.id
@@ -148,7 +191,7 @@ def evidence_inspector(finding: Finding, inv: Investigation):
         hide_index=True,
         alt="Computed evidence behind the current finding",
     )
-    with st.expander("Contract and provenance"):
+    with st.expander("Contract and execution details"):
         st.json(
             {
                 "plan": result.plan.model_dump(mode="json"),
@@ -161,3 +204,132 @@ def evidence_inspector(finding: Finding, inv: Investigation):
         )
     for limitation in finding.limitations:
         st.caption(limitation)
+
+
+def workflow_note(step: str, purpose: str, action: str):
+    """Short, visible orientation; never hides essential interpretation in an expander."""
+    with st.container(border=True):
+        st.caption(step.upper())
+        st.markdown(purpose)
+        st.caption(action)
+
+
+def scope_caption(result):
+    scope = result.metadata.get("analysis_scope", {})
+    text = f"{result.support:,} supporting rows · {result.missing:,} missing"
+    if scope:
+        text += f" · {scope['statistical_rows']:,} statistical rows / {scope['displayed_marks']:,} displayed marks"
+    if result.metadata.get("ecdf_error") is not None:
+        text += f" · max cumulative display error {result.metadata['ecdf_error']:.4g}"
+    return text
+
+
+def comparison_board(bundle, key="comparison"):
+    entity_note = (
+        f"{bundle.spec.entity_overlap:,} overlapping entities"
+        if bundle.spec.entity_overlap is not None
+        else "entity overlap not evaluated"
+    )
+    st.caption(
+        f"REFERENCE: {bundle.spec.reference.upper()} · DENOMINATORS: {bundle.spec.denominator.upper()} · SELECTION: {bundle.spec.selection.policy.upper()} · {bundle.spec.row_overlap:,} overlapping rows / {entity_note}"
+    )
+    cumulative = bundle.spec.operation == "ecdf"
+    grid = st.grid(3 if cumulative else 2, min_column_width=260 if cumulative else 350, gap="small")
+    for view in bundle.views:
+        with grid.cell():
+            with st.container(border=True, height="stretch"):
+                st.markdown(f"**{view.role} · {len(view.context.row_ids):,} population rows**")
+                st.caption(scope_caption(view.result))
+                chart_view(
+                    view.finding.chart,
+                    view.result,
+                    f"{key}_{view.role}_{bundle.id}",
+                    height=280 if cumulative else 300,
+                )
+                definition = view.result.metadata.get("definition")
+                if definition:
+                    st.caption(
+                        definition.get("description")
+                        or definition["label"] + " · " + definition["aggregation"].replace("_", " ")
+                    )
+                    st.caption(
+                        f"Denominator population: {view.result.metadata.get('denominator_population_rows', len(view.context.row_ids)):,} rows. Membership and valid contributors can differ."
+                    )
+    if cumulative and bundle.summary:
+        with grid.cell():
+            with st.container(border=True, height="stretch"):
+                st.markdown("**Differences across the distribution**")
+                st.caption(
+                    "Selected minus reference at matched quantiles. Full source values and the linear quantile estimator; no significance claim."
+                )
+                st.dataframe(
+                    bundle.summary,
+                    hide_index=True,
+                    height=218,
+                    column_config={
+                        "quantile": st.column_config.NumberColumn("q", format="%.2f"),
+                        "selected": st.column_config.NumberColumn("Selected", format="%.3g"),
+                        "reference": st.column_config.NumberColumn("Reference", format="%.3g"),
+                        "difference": st.column_config.NumberColumn("Difference", format="%.3g"),
+                    },
+                    alt="Source quantile differences beside both cumulative curves",
+                )
+    elif bundle.summary:
+        st.dataframe(
+            bundle.summary,
+            hide_index=True,
+            height=min(240, 38 + 35 * len(bundle.summary)),
+            alt="Exact comparison differences and support; no significance claim",
+        )
+    for message in bundle.exclusions:
+        st.caption(message)
+    ws = workspace()
+    if bundle.spec.operation == "ecdf" and ws.dataset is not None and not ws.dataset.frame.empty:
+        from firstlook.numerics import threshold_probability
+
+        with st.form("threshold_" + key + bundle.id, border=False):
+            with st.container(horizontal=True, vertical_alignment="bottom"):
+                threshold = st.number_input(
+                    "Exact at-or-below threshold",
+                    value=float(bundle.summary[len(bundle.summary) // 2]["selected"]),
+                    key="threshold_value_" + key + bundle.id,
+                )
+                query = st.form_submit_button("Query source values")
+            if query:
+                from firstlook.comparison import dataset_for_bundle
+
+                source = dataset_for_bundle(bundle, ws.dataset)
+                st.dataframe(
+                    [
+                        {
+                            "Population": v.role,
+                            **threshold_probability(
+                                source.frame.loc[v.context.row_ids, bundle.spec.measure].dropna(),
+                                threshold,
+                            ),
+                        }
+                        for v in bundle.views
+                    ],
+                    hide_index=True,
+                    alt="Exact source cumulative probabilities, independent of display compression",
+                )
+    if bundle.model_slice:
+        st.markdown("**Recorded held-out model evidence**")
+        st.caption(bundle.model_slice["interpretation"])
+        st.dataframe(
+            [
+                {k: v for k, v in bundle.model_slice[role].items() if k != "row_ids"} | {"Population": role}
+                for role in ["Selected", "Reference"]
+            ],
+            hide_index=True,
+            alt="Error summaries for the original held-out memberships",
+        )
+    if bundle.interpretation.get("synthesis"):
+        st.markdown("**Terra’s proposed interpretation**")
+        st.markdown(bundle.interpretation["synthesis"]["interpretation"])
+        for question in bundle.interpretation["synthesis"].get("next_questions", []):
+            st.caption("Next question: " + question)
+    elif bundle.interpretation.get("note"):
+        st.caption(bundle.interpretation["note"])
+    for check in bundle.checks:
+        st.caption(check.operation.replace("_", " ") + " · " + check.status + ": " + check.summary)

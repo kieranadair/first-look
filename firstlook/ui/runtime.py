@@ -10,6 +10,7 @@ from firstlook.challenges import automatic_challenges
 from firstlook.config import settings_from
 from firstlook.contracts import digest
 from firstlook.discovery import discover
+from firstlook.discovery import Investigation, analyze, plan_for
 from firstlook.ingest import Dataset
 from firstlook.investigation import prioritize, run_terra
 from firstlook.jobs import JobManager
@@ -190,6 +191,155 @@ def start_semantic_review(ws: Workspace) -> None:
     ws.semantic_review_count += 1
 
 
+def start_recipe(ws: Workspace, recipe: str, fields: list[str], params: dict):
+    from firstlook.exploration import RECIPES, perspective_coverage
+
+    ds, ctx = snapshot(ws), ws.context()
+    inv = copy.deepcopy(ws.investigation) if ws.investigation else Investigation(ctx)
+    plan = plan_for(ctx, "exploration", fields, RECIPES[recipe], {"recipe": recipe, **params})
+
+    def work(progress, cancelled):
+        progress(RECIPES[recipe])
+        result, finding = analyze(ds, ctx, plan)
+        companion_operation = (
+            "relationship"
+            if recipe in {"density", "influence"}
+            else "group_distribution"
+            if recipe == "group_shape"
+            else "distribution"
+            if recipe == "histogram_sensitivity"
+            else None
+        )
+        if companion_operation:
+            try:
+                cr, cf = analyze(
+                    ds,
+                    ctx,
+                    plan_for(
+                        ctx,
+                        companion_operation,
+                        fields,
+                        "Recorded context for " + RECIPES[recipe],
+                        {"normalization": params.get("normalization", "count")}
+                        if recipe == "histogram_sensitivity"
+                        else None,
+                    ),
+                )
+                inv.add_view(cr, cf)
+                inv.related_views[result.id] = {"companion": cr.id, "intent": "Complementary perspective"}
+            except ValueError:
+                pass
+        if recipe == "temporal" and params.get("mode") == "calendar":
+            from firstlook.semantic.planner import metric_plan
+
+            cr, cf = analyze(
+                ds,
+                ctx,
+                metric_plan(
+                    ds,
+                    ctx,
+                    params["metric"],
+                    time_field=params["time_field"],
+                    period=params.get("period", "MS"),
+                    question="Recorded chronological context",
+                ),
+            )
+            inv.add_view(cr, cf)
+            inv.related_views[result.id] = {
+                "companion": cr.id,
+                "intent": "Calendar phase beside its recorded chronology",
+            }
+        inv.add_view(result, finding)
+        inv.coverage = perspective_coverage(ds, inv)
+        return inv
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "recipe:" + plan.id, work)
+    ws.job_kind, ws.job_context = "recipe", ctx.id
+
+
+def start_view(ws: Workspace, operation: str, fields: list[str], params: dict, question: str):
+    from firstlook.exploration import perspective_coverage
+
+    ds, ctx = snapshot(ws), ws.context()
+    inv = copy.deepcopy(ws.investigation) if ws.investigation else Investigation(ctx)
+    p = plan_for(ctx, operation, fields, question, params)
+
+    def work(progress, cancelled):
+        progress(question)
+        result, finding = analyze(ds, ctx, p)
+        if operation == "quantile_bin_summary":
+            cr, cf = analyze(
+                ds,
+                ctx,
+                plan_for(ctx, "relationship", fields, "Recorded pairs behind conditional center and spread"),
+            )
+            inv.add_view(cr, cf)
+        inv.add_view(result, finding)
+        if operation == "quantile_bin_summary":
+            inv.related_views[result.id] = {
+                "companion": cr.id,
+                "intent": "Conditional center and spread beside recorded pairs",
+            }
+        inv.coverage = perspective_coverage(ds, inv)
+        return inv
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "view:" + p.id, work)
+    ws.job_kind, ws.job_context = "recipe", ctx.id
+
+
+def start_comparison(ws: Workspace, **kwargs):
+    from firstlook.comparison import build_comparison
+
+    if ws.selection is None:
+        raise ValueError("Preview a cohort first.")
+    ds, ctx = snapshot(ws), ws.context()
+    selection = ws.selection.model_copy(deep=True)
+    model = ws.model.model_copy(deep=True) if ws.model else None
+
+    def work(progress, cancelled):
+        progress("Computing selected and reference populations with shared definitions")
+        return build_comparison(ds, selection, model=model, **kwargs)
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "comparison:" + digest([selection.id, kwargs]), work)
+    ws.job_kind, ws.job_context, ws.job_revision = "comparison", ctx.id, selection.revision
+
+
+def start_comparison_review(ws: Workspace):
+    from firstlook.investigation import review_comparison
+
+    cfg = settings()
+    if (
+        ws.comparison is None
+        or ws.comparison_review_count
+        or not cfg.available("terra")
+        or not st.session_state.get("external_ok", False)
+    ):
+        raise ValueError(
+            "Comparison review needs Terra, dataset permission and an unused review allowance in this investigation."
+        )
+    ds, ctx = snapshot(ws), ws.context()
+    bundle = ws.comparison.model_copy(deep=True)
+
+    def work(progress, cancelled):
+        try:
+            return review_comparison(
+                ds,
+                bundle,
+                TerraProvider(cfg),
+                JevProvider(cfg) if cfg.available("jev") else None,
+                cfg.terra_visual_review,
+                progress,
+                cancelled,
+            )
+        except ProviderError as exc:
+            bundle.interpretation = {"status": "unavailable", "note": str(exc)}
+            return bundle
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "comparison-review:" + bundle.id, work)
+    ws.job_kind, ws.job_context, ws.job_revision = "comparison", ctx.id, bundle.spec.selection.revision
+    ws.comparison_review_count += 1
+
+
 @st.fragment(run_every=timedelta(seconds=1))
 def poll_job():
     ws = workspace()
@@ -208,8 +358,13 @@ def poll_job():
             if st.button("Cancel task", key="cancel_job", icon=":material/close:"):
                 manager().cancel(ws.owner, ws.job_id)
         return
-    if job.state == "completed" and ws.dataset and job.context == ws.context().id:
-        if ws.job_kind == "semantics":
+    same_revision = ws.job_kind != "comparison" or (
+        ws.selection is not None and ws.selection.revision == ws.job_revision
+    )
+    if job.state == "completed" and ws.dataset and job.context == ws.context().id and same_revision:
+        if ws.job_kind == "comparison":
+            ws.comparison = job.result
+        elif ws.job_kind == "semantics":
             ws.semantic_review = job.result
         elif ws.job_kind == "model":
             ws.model = job.result
@@ -218,10 +373,14 @@ def poll_job():
                 diagnostic_findings(ws.dataset, ws.investigation, job.result)
         else:
             ws.investigation = job.result
+            if ws.job_kind == "recipe" and ws.investigation.findings:
+                ws.opened.add(ws.investigation.findings[0].id)
+                ws.explore_id = ws.investigation.findings[0].id
             if ws.investigation.model_runs:
                 ws.model = ws.investigation.model_runs[-1]
                 if ws.job_kind == "connected":
                     ws.model_count += 1
+        ws.bound_views()
         ws.message = "The investigation is ready."
     elif job.state == "failed":
         ws.message = job.error

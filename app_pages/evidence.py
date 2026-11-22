@@ -2,7 +2,7 @@ import streamlit as st
 
 from firstlook.evidence import brief, export_bundle, import_bundle, recompute
 from firstlook.contracts import digest
-from firstlook.ui.components import page_header
+from firstlook.ui.components import page_header, comparison_board
 from firstlook.ui.runtime import workspace
 
 ws = workspace()
@@ -20,10 +20,26 @@ with st.expander("Open a saved investigation"):
             st.rerun()
         except (ValueError, KeyError) as exc:
             st.error(str(exc))
+if ws.comparisons:
+    st.subheader("Preserved comparisons")
+    st.caption(
+        "Each board retains its own exact selected/reference populations, definitions and compatible display. Select one board at a time to keep its related evidence together."
+    )
+    chosen = st.selectbox(
+        "Comparison board",
+        [b.id for b in ws.comparisons],
+        format_func=lambda i: next(
+            f"{b.spec.operation} · {len(b.spec.selection.rows):,} selected / {len(b.spec.reference_rows):,} reference rows"
+            for b in ws.comparisons
+            if b.id == i
+        ),
+        key="evidence_comparison",
+    )
+    comparison_board(next(b for b in ws.comparisons if b.id == chosen), "saved")
 if ws.investigation is None:
-    if ws.pins:
+    if ws.pins or ws.comparisons:
         st.info(
-            "The current analytical definition changed. Your earlier pinned evidence remains preserved below. Run a new investigation to prepare a combined portable bundle."
+            "The current analytical definition changed. Your earlier evidence retains its original definitions. Run a new investigation to prepare a combined portable bundle."
         )
         for item in ws.pins:
             with st.container(border=True):
@@ -102,6 +118,9 @@ export_state = digest(
         ws.model.id if ws.model else None,
         [f.id for f in ws.investigation.findings],
         [d.model_dump(mode="json") for d in ws.investigation.decisions],
+        [b.model_dump(mode="json") for b in ws.comparisons],
+        ws.comparison.model_dump(mode="json") if ws.comparison else None,
+        ws.investigation.coverage,
     ]
 )
 if st.button("Prepare downloads", type="primary", icon=":material/inventory_2:", key="prepare_export"):

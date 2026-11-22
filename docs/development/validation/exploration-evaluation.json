@@ -1,0 +1,332 @@
+{
+  "scope": "Finite synthetic patterns and nulls; not human productivity, causal validity or general detection guarantees. Previous screen is reconstructed arithmetic, not a full old UI comparison.",
+  "seeded_summary": [
+    {
+      "pattern": "linear",
+      "fixtures": 10,
+      "previous_witnesses": 10,
+      "current_witnesses": 10,
+      "interpretation": "Recovery of this specified synthetic pattern"
+    },
+    {
+      "pattern": "curved_center",
+      "fixtures": 10,
+      "previous_witnesses": 10,
+      "current_witnesses": 10,
+      "interpretation": "Recovery of this specified synthetic pattern"
+    },
+    {
+      "pattern": "variance_only",
+      "fixtures": 10,
+      "previous_witnesses": 0,
+      "current_witnesses": 10,
+      "interpretation": "Recovery of this specified synthetic pattern"
+    },
+    {
+      "pattern": "independent_null",
+      "fixtures": 10,
+      "previous_witnesses": 0,
+      "current_witnesses": 0,
+      "interpretation": "False promotion audit; no structure planted"
+    }
+  ],
+  "fixtures": [
+    {
+      "seed": 17,
+      "pattern": "linear",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 17,
+      "pattern": "curved_center",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 17,
+      "pattern": "variance_only",
+      "expected_structure": true,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 17,
+      "pattern": "independent_null",
+      "expected_structure": false,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": false
+    },
+    {
+      "seed": 31,
+      "pattern": "linear",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 31,
+      "pattern": "curved_center",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 31,
+      "pattern": "variance_only",
+      "expected_structure": true,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 31,
+      "pattern": "independent_null",
+      "expected_structure": false,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": false
+    },
+    {
+      "seed": 82,
+      "pattern": "linear",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 82,
+      "pattern": "curved_center",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 82,
+      "pattern": "variance_only",
+      "expected_structure": true,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 82,
+      "pattern": "independent_null",
+      "expected_structure": false,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": false
+    },
+    {
+      "seed": 109,
+      "pattern": "linear",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 109,
+      "pattern": "curved_center",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 109,
+      "pattern": "variance_only",
+      "expected_structure": true,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 109,
+      "pattern": "independent_null",
+      "expected_structure": false,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": false
+    },
+    {
+      "seed": 151,
+      "pattern": "linear",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 151,
+      "pattern": "curved_center",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 151,
+      "pattern": "variance_only",
+      "expected_structure": true,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 151,
+      "pattern": "independent_null",
+      "expected_structure": false,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": false
+    },
+    {
+      "seed": 211,
+      "pattern": "linear",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 211,
+      "pattern": "curved_center",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 211,
+      "pattern": "variance_only",
+      "expected_structure": true,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 211,
+      "pattern": "independent_null",
+      "expected_structure": false,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": false
+    },
+    {
+      "seed": 307,
+      "pattern": "linear",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 307,
+      "pattern": "curved_center",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 307,
+      "pattern": "variance_only",
+      "expected_structure": true,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 307,
+      "pattern": "independent_null",
+      "expected_structure": false,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": false
+    },
+    {
+      "seed": 401,
+      "pattern": "linear",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 401,
+      "pattern": "curved_center",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 401,
+      "pattern": "variance_only",
+      "expected_structure": true,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 401,
+      "pattern": "independent_null",
+      "expected_structure": false,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": false
+    },
+    {
+      "seed": 503,
+      "pattern": "linear",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 503,
+      "pattern": "curved_center",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 503,
+      "pattern": "variance_only",
+      "expected_structure": true,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 503,
+      "pattern": "independent_null",
+      "expected_structure": false,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": false
+    },
+    {
+      "seed": 601,
+      "pattern": "linear",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 601,
+      "pattern": "curved_center",
+      "expected_structure": true,
+      "previous_center_or_association_screen": true,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 601,
+      "pattern": "variance_only",
+      "expected_structure": true,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": true
+    },
+    {
+      "seed": 601,
+      "pattern": "independent_null",
+      "expected_structure": false,
+      "previous_center_or_association_screen": false,
+      "current_shortlist_contains_witness": false
+    }
+  ],
+  "cdf_representation": [
+    {
+      "recipe_version": 1,
+      "plotted_vertices": 1200,
+      "max_vertical_error_independent_oracle": 0.976,
+      "reported_error": null
+    },
+    {
+      "recipe_version": 2,
+      "plotted_vertices": 31,
+      "max_vertical_error_independent_oracle": 0.0008200000000000013,
+      "reported_error": 0.0008200000000000013
+    }
+  ],
+  "seconds": 4.892858950999653,
+  "live_provider_calls": false,
+  "screenshots": false
+}

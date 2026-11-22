@@ -12,13 +12,22 @@ st.logo("static/mark.png", icon_image="static/mark.png", size="small")
 with st.sidebar:
     st.markdown("## First Look")
     st.caption("Discover. Challenge. Preserve.")
-pages = [
-    st.Page("app_pages/understand.py", title="Understand", icon=":material/table_chart:", default=True),
-    st.Page("app_pages/meaning.py", title="Meaning", icon=":material/schema:"),
-    st.Page("app_pages/discover.py", title="Discover", icon=":material/query_stats:"),
-    st.Page("app_pages/challenge.py", title="Challenge", icon=":material/compare_arrows:"),
-    st.Page("app_pages/evidence.py", title="Evidence", icon=":material/bookmarks:"),
-]
+pages = {
+    "Prepare": [
+        st.Page("app_pages/understand.py", title="Understand", icon=":material/table_chart:", default=True),
+        st.Page("app_pages/meaning.py", title="Meaning", icon=":material/schema:"),
+    ],
+    "Investigate": [
+        st.Page("app_pages/explore.py", title="Explore", icon=":material/explore:"),
+        st.Page("app_pages/discover.py", title="Findings", icon=":material/query_stats:"),
+        st.Page("app_pages/compare.py", title="Compare", icon=":material/compare_arrows:"),
+        st.Page("app_pages/models.py", title="Models", icon=":material/model_training:"),
+        st.Page("app_pages/challenge.py", title="Challenge", icon=":material/compare_arrows:"),
+    ],
+    "Preserve": [
+        st.Page("app_pages/evidence.py", title="Evidence", icon=":material/bookmarks:"),
+    ],
+}
 navigation = st.navigation(pages)
 with st.sidebar:
     if ws.dataset:
@@ -43,7 +52,7 @@ with st.sidebar:
         st.caption(
             "Local work makes no provider calls. External analysis requires your explicit dataset permission."
         )
-        st.caption("First Look 0.2 · Apache-2.0")
+        st.caption("First Look 0.3 · Apache-2.0")
 if ws.message:
     st.toast(ws.message)
     ws.message = ""

@@ -127,7 +127,11 @@ with st.container(border=True):
         f"{len(semantic_model.clarifications)} focused decisions · {len(semantic_model.metrics)} metric definitions · {len(semantic_model.relationships)} observed relationships. Define grain, quantities, denominators and time policies once."
     )
     st.page_link("app_pages/meaning.py", label="Review analytical meaning", icon=":material/schema:")
-with st.expander("What does this table represent?"):
+with st.container(border=True):
+    st.markdown("**What does one row represent?**")
+    st.caption(
+        "Add collection context and known limitations. You can explore now and refine business definitions in Meaning."
+    )
     with st.form("dataset_context_form"):
         description = st.text_area(
             "Dataset context",
@@ -289,6 +293,6 @@ if st.button(
 ):
     try:
         start_analysis(ws)
-        st.switch_page("app_pages/discover.py")
+        st.switch_page("app_pages/explore.py")
     except ValueError as exc:
         st.error(str(exc))

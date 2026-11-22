@@ -1,0 +1,51 @@
+{
+  "related_curves_visible_together": {
+    "viewport": [
+      1440,
+      900
+    ],
+    "chart_bounds": [
+      {
+        "x": 396,
+        "y": 515.125,
+        "width": 284,
+        "height": 280
+      },
+      {
+        "x": 728,
+        "y": 515.125,
+        "width": 284,
+        "height": 280
+      }
+    ]
+  },
+  "quantiles_beside_curves": true,
+  "save_board": true,
+  "download_contains_comparison": true,
+  "responsive_companions": [
+    {
+      "width": 1440,
+      "chart_widths": [
+        284,
+        284
+      ]
+    },
+    {
+      "width": 1024,
+      "chart_widths": [
+        242,
+        242
+      ]
+    },
+    {
+      "width": 390,
+      "chart_widths": [
+        326,
+        326
+      ]
+    }
+  ],
+  "page_errors": [],
+  "console_warnings": [],
+  "screenshots_video_traces": false
+}

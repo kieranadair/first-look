@@ -22,11 +22,18 @@ def _entity_ids(frame, keys):
 
 
 def _scalar(
-    dataset, metric: Metric, part: pd.DataFrame, whole: pd.DataFrame, group_keys=None
+    dataset,
+    metric: Metric,
+    part: pd.DataFrame,
+    whole: pd.DataFrame,
+    group_keys=None,
+    allocation_population=None,
 ) -> dict[str, Any]:
     model = get_model(dataset)
     if metric.aggregation == "ratio":
-        numerator = _scalar(dataset, model.metric(metric.numerator or ""), part, whole, group_keys)
+        numerator = _scalar(
+            dataset, model.metric(metric.numerator or ""), part, whole, group_keys, allocation_population
+        )
         denom_part = part if metric.denominator_scope == "group" else whole
         denominator = _scalar(
             dataset,
@@ -34,6 +41,7 @@ def _scalar(
             denom_part,
             whole,
             group_keys if metric.denominator_scope == "group" else None,
+            allocation_population,
         )
         d = denominator["value"]
         n = numerator["value"]
@@ -63,7 +71,11 @@ def _scalar(
         value = valid.sum() if n else None
         if entity and group_keys and metric.allocation == "equal":
             columns = list(dict.fromkeys(entity.keys + group_keys))
-            memberships = whole.dropna(subset=columns).drop_duplicates(columns)
+            memberships = (
+                (allocation_population if allocation_population is not None else whole)
+                .dropna(subset=columns)
+                .drop_duplicates(columns)
+            )
             frequencies = memberships.groupby(entity.keys, dropna=False).size().to_dict()
             unique = original.dropna(subset=list(dict.fromkeys(columns + [metric.field]))).drop_duplicates(
                 columns
@@ -222,7 +234,20 @@ def _evaluate(dataset, ctx, plan):
             raise ValueError("A denominator comparison requires a ratio metric.")
         metric.denominator_scope = "group"
     group_by = list(plan.params.get("group_by", []))
-    if set(plan.params) - {"metric", "group_by", "time_field", "period", "limit", "variant"}:
+    if set(plan.params) - {
+        "metric",
+        "group_by",
+        "time_field",
+        "period",
+        "limit",
+        "variant",
+        "recipe_version",
+        "ranking",
+        "fixed_groups",
+        "anchor",
+        "denominator",
+        "full_family",
+    }:
         raise ValueError("Unknown metric parameters are not executable.")
     if plan.params.get("variant") not in {
         None,
@@ -239,6 +264,21 @@ def _evaluate(dataset, ctx, plan):
     if check.status != "allowed":
         raise ValueError(" ".join(check.reasons + check.requirements))
     frame = dataset.frame.loc[ctx.row_ids]
+    population = frame
+    allocation_population = None
+    if plan.params.get("anchor"):
+        from firstlook.contracts import AnalysisContext
+
+        anchor = AnalysisContext.model_validate(plan.params["anchor"])
+        if (
+            anchor.id != dataset.context(anchor.row_ids, anchor.focus, anchor.assumption).id
+            or not set(ctx.row_ids) <= set(anchor.row_ids)
+            or anchor.semantics != ctx.semantics
+        ):
+            raise ValueError("Invalid anchored population for this child context.")
+        allocation_population = dataset.frame.loc[anchor.row_ids]
+        if plan.params.get("denominator") == "anchored":
+            population = allocation_population
     warnings = list(check.warnings)
     if metric.field and frame[metric.field].isna().any():
         warnings.append(
@@ -251,7 +291,8 @@ def _evaluate(dataset, ctx, plan):
         warnings.append(
             f"{missing_group:,} rows have unassigned grouping values; the active-population denominator retains them when eligible."
         )
-    limit = max(2, min(20, int(plan.params.get("limit", 12))))
+    modern = int(plan.params.get("recipe_version", 1)) >= 2
+    limit = max(2, min(201 if plan.params.get("full_family") else 20, int(plan.params.get("limit", 12))))
     if time_field:
         if group_by:
             raise ValueError(
@@ -480,18 +521,96 @@ def _evaluate(dataset, ctx, plan):
             if not group_by
             else list(source.groupby(group_by, dropna=False, observed=True, sort=True))
         )
-        parts.sort(key=lambda pair: -len(pair[1]))
-        if len(parts) > limit:
+
+        def group_key(label):
+            values = list(label) if isinstance(label, tuple) else [label]
+            return digest([group_by, clean(values)])
+
+        fixed = plan.params.get("fixed_groups")
+        omitted_keys = []
+        if fixed:
+            by_key = {group_key(label): (label, part) for label, part in parts}
+            selected_keys = {item["key"] for item in fixed if not item.get("other")}
+            omitted = [(label, part) for label, part in parts if group_key(label) not in selected_keys]
+            omitted_keys = [group_key(label) for label, _ in omitted]
+            remainder = pd.concat([p for _, p in omitted]) if omitted else source.iloc[:0]
+            parts = [
+                (
+                    item["label"],
+                    remainder if item.get("other") else by_key.get(item["key"], (None, source.iloc[:0]))[1],
+                )
+                for item in fixed
+            ]
+        else:
+            ranking = str(plan.params.get("ranking", "metric_desc" if modern else "frequency"))
+            if ranking not in {"metric_desc", "metric_asc", "frequency", "natural"}:
+                raise ValueError("Unsupported category order.")
+            if ranking == "frequency":
+                parts.sort(
+                    key=lambda pair: (-len(pair[1]), group_key(pair[0])) if modern else (-len(pair[1]),)
+                )
+            elif ranking.startswith("metric"):
+                scalar_values = {
+                    group_key(label): _scalar(
+                        dataset, metric, part, population, group_by, allocation_population
+                    )["value"]
+                    for label, part in parts
+                }
+                parts.sort(
+                    key=lambda pair: (
+                        scalar_values[group_key(pair[0])] is None,
+                        (-1 if ranking == "metric_desc" else 1) * (scalar_values[group_key(pair[0])] or 0),
+                        group_key(pair[0]),
+                    )
+                )
+            elif len(group_by) == 1 and dataset.field(group_by[0]).order:
+                order = dataset.field(group_by[0]).order
+                parts.sort(
+                    key=lambda pair: (
+                        order.index(str(pair[0][0] if isinstance(pair[0], tuple) else pair[0]))
+                        if str(pair[0][0] if isinstance(pair[0], tuple) else pair[0]) in order
+                        else len(order)
+                    )
+                )
+        if not fixed and len(parts) > limit:
             shown = parts[: limit - 1]
+            omitted_keys = [group_key(label) for label, _ in parts[limit - 1 :]]
             others = pd.concat([p for _, p in parts[limit - 1 :]])
             parts = shown + [("Other recorded groups", others)]
             warnings.append(
                 "Other is recomputed from the union of source rows, not a sum of displayed subgroup statistics."
             )
-        for label, part in parts:
+        for position, (label, part) in enumerate(parts):
             text = " · ".join(str(v) for v in label) if isinstance(label, tuple) else str(label)
-            scalar = _scalar(dataset, metric, part, frame, group_by)
-            records.append({"label": text, **scalar, "row_ids": _ids(part)})
+            scalar = _scalar(dataset, metric, part, population, group_by, allocation_population)
+            identity = (
+                fixed[position]
+                if fixed
+                else {
+                    "key": digest([group_by, "synthetic-remainder"])
+                    if omitted_keys and position == len(parts) - 1
+                    else group_key(label),
+                    "other": bool(omitted_keys and position == len(parts) - 1),
+                    "values": clean(list(label) if isinstance(label, tuple) else [label]),
+                }
+            )
+            records.append(
+                {
+                    "label": text,
+                    **scalar,
+                    "row_ids": _ids(part),
+                    **(
+                        {
+                            "key": identity["key"],
+                            "other": identity.get("other", False),
+                            "group_values": identity.get("values", []),
+                            "member_rows": len(part),
+                        }
+                        if modern
+                        else {}
+                    ),
+                }
+            )
             metric_groups.append(part)
         template = "bar"
         x_label = metric.label
@@ -581,6 +700,17 @@ def _evaluate(dataset, ctx, plan):
                 "selection_semantics": "Recorded member rows of a displayed group or period. Missing-value exclusions and denominator population remain explicit; a counter interval links both endpoint readings.",
                 "quantity_unit": model.meaning(metric.field).unit if metric.field else "",
                 "population_rows": len(frame),
+                **(
+                    {
+                        "recipe_version": 2,
+                        "denominator_population_rows": len(population),
+                        "denominator_scope": plan.params.get("denominator", "cohort"),
+                        "omitted_keys": omitted_keys if not time_field else [],
+                        "ranking": plan.params.get("ranking", "metric_desc"),
+                    }
+                    if modern
+                    else {}
+                ),
                 "decision": check.model_dump(mode="json"),
             }
         ),

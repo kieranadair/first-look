@@ -31,6 +31,9 @@ LABELS = {
     "aggregation": "Compare time aggregation",
     "binning": "Compare histogram bins",
     "residual_spread_by_bin": "Inspect held-out error spread",
+    "group_shape": "Compare group shape and quantiles",
+    "density": "Count every pair in a numeric grid",
+    "influence": "Inspect linear-fit influence",
 }
 
 
@@ -45,14 +48,16 @@ def eligible(dataset: Dataset, inv: Investigation, finding: Finding) -> list[str
     if op == "relationship":
         if dimensions(dataset):
             choices.append("subgroup")
-        choices.extend(["extremes", "rank", "quantile_bin_summary"])
+        choices.extend(["extremes", "rank", "quantile_bin_summary", "density", "influence"])
         if inv.context.assumption == "exchangeable":
             choices.append("resampling")
     if op == "group_distribution":
-        choices.append("distribution")
+        choices.extend(["distribution", "group_shape"])
+    if op == "quantile_bin_summary":
+        choices.extend(["density", "influence"])
     if op == "time":
         choices.append("aggregation")
-    if op == "distribution":
+    if op in {"distribution", "ecdf"}:
         choices.append("binning")
     if op == "model_diagnostic" and inv.model_runs and inv.model_runs[-1].task == "regression":
         choices.append("residual_spread_by_bin")
@@ -86,7 +91,12 @@ def challenge(
     status = "similar"
     summary = ""
     try:
-        if operation == "subgroup":
+        if operation in {"group_shape", "density", "influence"}:
+            result, other = analyze(
+                dataset, ctx, plan_for(ctx, "exploration", fields, LABELS[operation], {"recipe": operation})
+            )
+            chart, summary, status = other.chart, other.observation, "not_checked"
+        elif operation == "subgroup":
             group = group_field or next(
                 (f for f in dimensions(dataset) if 2 <= frame[f].nunique() <= 8), None
             )

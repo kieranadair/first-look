@@ -12,6 +12,7 @@ ty check firstlook app_pages streamlit_app.py
 python -m scripts.benchmark
 python -m scripts.provider_preflight --offline
 python -m scripts.evaluate_terra --seeds 17 82
+python -m scripts.evaluate_exploration
 ```
 
 The provider tests use the **real official SDKs** with controlled HTTP transports or a controlled hosted-SDK boundary. They do not present fixtures as live models. Once keys are configured, `python -m scripts.provider_preflight --live` makes small billable smoke calls. `python -m scripts.evaluate_terra --live --seeds 17` runs a recorded matched text/visual evaluation; inspect correctness, check yield, contradictions, abstention and cost before claiming visual-model uplift.
@@ -27,9 +28,11 @@ In another terminal, from the repo root:
 ```bash
 python -m scripts.runtime_smoke
 python -m scripts.semantic_smoke
+python -m scripts.exploration_smoke
 playwright install chromium
 python -m scripts.browser_smoke
 python -m scripts.semantic_browser_smoke
+python -m scripts.exploration_browser_smoke
 ```
 
 The browser test verifies actual chart-mark selection, filtering/reset, downloads, responsive cards and light/dark tokens. It captures **no screenshots, video or traces**. Stop the development server after checking.
@@ -37,6 +40,7 @@ The browser test verifies actual chart-mark selection, filtering/reset, download
 ## Reference material
 
 - [Current implementation context](CONTEXT.md)
+- [Comparison/exploration uplift](exploration-uplift.md) and [build design](exploration-uplift-plan.md)
 - [Semantic uplift build report](semantic-uplift.md) and [research-to-implementation mapping](../research/semantic-contract.md)
 - [Original design specification](specification.md), preserved as design history, not a second setup guide
 - [Historical build report](build-report.md)

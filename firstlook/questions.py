@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import Field
 
@@ -23,6 +23,8 @@ class QuestionIntent(Contract):
         "quantile_bin_summary",
         "time",
         "metric",
+        "category_relationship",
+        "group_shape",
         "unsupported",
     ]
     fields: list[str] = Field(max_length=2)
@@ -30,6 +32,7 @@ class QuestionIntent(Contract):
     metric_id: str | None = None
     group_by: list[str] = Field(default_factory=list, max_length=2)
     time_field: str | None = None
+    period: Literal["D", "W", "MS"] = "MS"
 
 
 def local_intent(dataset: Dataset, question: str) -> QuestionIntent:
@@ -58,12 +61,51 @@ def local_intent(dataset: Dataset, question: str) -> QuestionIntent:
     if named:
         metric = max(named, key=lambda m: len(m.label))
         times = [f for f in hits if dataset.field(f).role.value == "timestamp"]
+        resolution = next(
+            (
+                period
+                for pattern, period in [
+                    (r"\b(daily|day)\b", "D"),
+                    (r"\b(weekly|week)\b", "W"),
+                    (r"\b(monthly|month)\b", "MS"),
+                ]
+                if re.search(pattern, q)
+            ),
+            None,
+        )
+        temporal_request = bool(resolution or re.search(r"\b(over time|time series|trend)\b", q))
+        if not times and any(dataset.field(f).name.casefold() in {"day", "week", "month"} for f in cats):
+            temporal_request = False
+        if len(times) > 1:
+            return QuestionIntent(
+                operation="unsupported",
+                fields=[],
+                clarification="Choose one timestamp for this aggregation. Multiple date fields answer different questions.",
+            )
+        if temporal_request and not times:
+            available = [
+                f.id for f in dataset.record.fields if f.role.value == "timestamp" and not f.excluded
+            ]
+            if len(available) != 1:
+                return QuestionIntent(
+                    operation="unsupported",
+                    fields=[],
+                    clarification="Name the timestamp to use for this period aggregation, or select it in Explore → Time.",
+                )
+            times = available
+        if times and cats:
+            return QuestionIntent(
+                operation="unsupported",
+                fields=[],
+                clarification="This catalog computes one time series per metric. Define a cohort for the group in Compare, then inspect its time series in Explore → Time; grouping and time are not silently pooled together.",
+            )
         return QuestionIntent(
             operation="metric",
             fields=[],
             metric_id=metric.id,
             group_by=cats[:2] if not times else [],
             time_field=times[0] if times else None,
+            period=cast(Literal["D", "W", "MS"], resolution or "MS"),
         )
     if (
         re.search(r"\b(total|sum|average|weighted|share|percentage|percent|per order|per customer)\b", q)
@@ -76,11 +118,21 @@ def local_intent(dataset: Dataset, question: str) -> QuestionIntent:
         )
     if "missing" in q:
         return QuestionIntent(operation="missingness", fields=[])
+    if len(cats) >= 2 and not nums:
+        return QuestionIntent(operation="category_relationship", fields=cats[:2])
     if cats and nums:
-        return QuestionIntent(operation="group_distribution", fields=[cats[0], nums[0]])
+        return QuestionIntent(
+            operation="group_shape"
+            if re.search(r"\b(shape|spread|tails|distributions)\b", q)
+            else "group_distribution",
+            fields=[cats[0], nums[0]],
+        )
     if len(nums) >= 2:
         return QuestionIntent(
-            operation="quantile_bin_summary" if "shape" in q else "relationship", fields=nums[:2]
+            operation="quantile_bin_summary"
+            if re.search(r"\b(shape|spread|variance|dispersion)\b", q)
+            else "relationship",
+            fields=nums[:2],
         )
     if nums:
         return QuestionIntent(operation="distribution", fields=nums[:1])
@@ -119,8 +171,17 @@ def run_question(dataset: Dataset, inv: Investigation, question: str, terra=None
                 intent.metric_id,
                 intent.group_by,
                 intent.time_field,
+                period=intent.period,
                 question=question.strip(),
             ),
+        )
+        inv.add_view(result, finding)
+        return inv
+    if intent.operation == "group_shape":
+        result, finding = analyze(
+            dataset,
+            inv.context,
+            plan_for(inv.context, "exploration", intent.fields, question.strip(), {"recipe": "group_shape"}),
         )
         inv.add_view(result, finding)
         return inv
@@ -132,6 +193,7 @@ def run_question(dataset: Dataset, inv: Investigation, question: str, terra=None
         "missingness": 0,
         "quantile_bin_summary": 2,
         "time": 2,
+        "category_relationship": 2,
     }
     if len(intent.fields) != sizes[intent.operation]:
         raise ValueError("This question did not resolve to a complete supported analysis.")

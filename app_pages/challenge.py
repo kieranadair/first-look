@@ -6,6 +6,7 @@ from firstlook.semantics import dimensions
 from firstlook.state import pin
 from firstlook.ui.components import STATUS, chart_view, page_header, render_chart
 from firstlook.ui.runtime import workspace
+from firstlook.visualization.compiler import axis_domains
 
 ws = workspace()
 page_header(
@@ -67,19 +68,48 @@ if checks:
     label, color = STATUS[current.status]
     st.badge(label, color=cast(Any, color))
     st.markdown(current.summary)
+    original = inv.results[finding.result_id]
+    alternative = current.result
+    compatible_transform = not alternative or original.metadata.get("definition", {}).get(
+        "transform", "identity"
+    ) == alternative.metadata.get("definition", {}).get("transform", "identity")
+    if (
+        alternative
+        and compatible_transform
+        and current.chart
+        and current.operation
+        in {
+            "subgroup",
+            "extremes",
+            "quantile_bin_summary",
+            "binning",
+            "aggregation",
+            "semantic_unit",
+            "semantic_denominator",
+            "semantic_gaps",
+            "semantic_time_aggregation",
+            "distribution",
+        }
+    ):
+        a, b = axis_domains(finding.chart, original), axis_domains(current.chart, alternative)
+        common = {k: (min(a[k][0], b[k][0]), max(a[k][1], b[k][1])) for k in a.keys() & b.keys()}
+        original = original.model_copy(deep=True)
+        alternative = alternative.model_copy(deep=True)
+        original.metadata["comparison_domains"] = {**a, **common}
+        alternative.metadata["comparison_domains"] = {**b, **common}
     grid = st.grid(2, min_column_width=420, gap="small")
     with grid.cell():
         with st.container(border=True):
             st.caption("ORIGINAL EVIDENCE")
-            st.subheader(finding.title)
-            render_chart(finding, inv, suffix="challenge_original", height=360)
+            st.markdown("**Recorded context**")
+            chart_view(finding.chart, original, "challenge_original_" + finding.id, height=360)
             st.caption(finding.observation)
     with grid.cell():
         with st.container(border=True):
             st.caption("UNDER THIS CHECK")
-            st.subheader(LABELS.get(current.operation, current.operation.replace("_", " ")))
-            if current.result and current.chart:
-                chart_view(current.chart, current.result, "challenge_alternative_" + current.id, height=360)
+            st.markdown("**Declared alternative**")
+            if alternative and current.chart:
+                chart_view(current.chart, alternative, "challenge_alternative_" + current.id, height=360)
                 st.caption(
                     f"{current.result.support:,} supporting observations · {current.result.missing:,} missing"
                 )

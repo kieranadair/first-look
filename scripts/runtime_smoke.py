@@ -48,6 +48,7 @@ def main():
     else:
         raise AssertionError("Investigation did not publish charts")
     checks = {"landing_and_discovery": True}
+    interact(page="discover")
     pin = next(a["key"] for a in state["actions"] if a.get("label") == "Pin")
     interact(trigger={"key": pin})
     for page in ["challenge", "evidence"]:

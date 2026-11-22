@@ -11,6 +11,7 @@ LABELS = {
     "semantic_unit": "Compare row and entity averaging",
     "semantic_denominator": "Change the denominator scope",
     "semantic_gaps": "Compare with unfilled scheduled gaps",
+    "semantic_time_aggregation": "Compare semantic time aggregation",
 }
 
 
@@ -24,6 +25,7 @@ def eligible(dataset, result):
     if metric.aggregation == "ratio" and metric.denominator_scope == "active_population":
         out.append("semantic_denominator")
     if result.plan.params.get("time_field"):
+        out.append("semantic_time_aggregation")
         policy = next(
             (
                 t
@@ -49,6 +51,30 @@ def check(dataset, inv, finding, operation, group_field=None):
         groups = list(plan.params.get("group_by", []))
         time = plan.params.get("time_field")
         period = plan.params.get("period", "MS")
+        if operation == "semantic_time_aggregation":
+            alternate_period = "W" if period != "W" else "MS"
+            result, other = analyze(
+                dataset,
+                inv.context,
+                metric_plan(
+                    dataset,
+                    inv.context,
+                    metric.id,
+                    groups,
+                    time,
+                    alternate_period,
+                    question=LABELS[operation],
+                ),
+            )
+            return ChallengeResult(
+                id=cid,
+                parent_id=finding.id,
+                operation=operation,
+                status="not_checked",
+                summary=f"The approved metric is recomputed from source components at {period} and {alternate_period} resolution. Different periods answer different questions; no change verdict is inferred from aligned list positions.",
+                result=result,
+                chart=other.chart,
+            )
         if operation == "semantic_reconciliation":
             base = (
                 get_model(dataset).metric(metric.denominator or "")
@@ -98,13 +124,47 @@ def check(dataset, inv, finding, operation, group_field=None):
             "semantic_gaps": "preserve_gaps",
         }[operation]
         alternative = metric_plan(
-            dataset, inv.context, metric.id, groups, time, period, question=LABELS[operation], variant=variant
+            dataset,
+            inv.context,
+            metric.id,
+            groups,
+            time,
+            period,
+            question=LABELS[operation],
+            variant=variant,
+            **{
+                k: v
+                for k, v in plan.params.items()
+                if k in {"anchor", "fixed_groups", "denominator", "ranking"}
+            },
+            **(
+                {
+                    "fixed_groups": [
+                        {
+                            "key": r["key"],
+                            "label": r["label"],
+                            "values": r.get("group_values", []),
+                            "other": r.get("other", False),
+                        }
+                        for r in original.records
+                    ]
+                }
+                if not time
+                and "fixed_groups" not in plan.params
+                and all("key" in r for r in original.records)
+                else {}
+            ),
         )
         result, other = analyze(dataset, inv.context, alternative)
         chart = other.chart
-        before = [r["value"] for r in original.records]
-        after = [r["value"] for r in result.records]
-        same = len(before) == len(after) and all(
+
+        def values_by_key(rows):
+            return {r.get("key", str(r.get("x", r.get("label")))): r["value"] for r in rows}
+
+        before_map, after_map = values_by_key(original.records), values_by_key(result.records)
+        before = [before_map[k] for k in sorted(before_map)]
+        after = [after_map[k] for k in sorted(after_map)]
+        same = before_map.keys() == after_map.keys() and all(
             (a is None and b is None) or (a is not None and b is not None and bool(np.isclose(a, b)))
             for a, b in zip(before, after)
         )

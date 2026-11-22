@@ -1,12 +1,13 @@
 import streamlit as st
 
-from firstlook.modeling import eligible_targets, predictor_policy, suggested_model_plan
+from firstlook.modeling import suggested_model_plan
 from firstlook.ui.components import evidence_inspector, finding_card, page_header, render_chart
-from firstlook.ui.runtime import settings, start_analysis, start_model, start_question, workspace
+from firstlook.ui.runtime import settings, start_analysis, start_question, workspace
 
 ws, cfg = workspace(), settings()
 page_header(
-    "Follow the evidence.", "A focused set of observations. A useful next question. Room to change your mind."
+    "Follow the evidence.",
+    "Browse computed observations, ask a question, or inspect a finding before comparing and challenging it.",
 )
 if ws.dataset is None:
     st.info("Choose an example or open your dataset in Understand.")
@@ -105,100 +106,13 @@ if not ws.replay:
         )
 view = st.segmented_control(
     "Explore",
-    ["Overview", "Relationships", "Model lens"],
+    ["Overview", "Relationships"],
     default="Overview",
     key="discover_view",
     persist_state="session",
     label_visibility="collapsed",
 )
 
-if view == "Model lens":
-    st.subheader("Look for structure the summaries can miss.")
-    st.caption(
-        "Compare held-out prediction with fixed-budget baselines. A high score is not a causal explanation."
-    )
-    if not ws.replay:
-        targets = eligible_targets(ds)
-        if not targets:
-            st.info(
-                "Model exploration needs an eligible focus with at least 200 labeled rows and adequate class support."
-            )
-        else:
-            default = targets.index(ws.focus) if ws.focus in targets else 0
-            target = st.selectbox(
-                "Model focus", targets, index=default, format_func=ds.label, key="model_target"
-            )
-            from firstlook.semantic.model import get_model
-
-            declared_group = get_model(ds).model_group
-            split = st.selectbox(
-                "Evaluation split",
-                ["group"] if declared_group else ["random", "group", "time"],
-                format_func=lambda x: {
-                    "random": "Held-out rows",
-                    "group": "Unseen groups",
-                    "time": "Later observations",
-                }[x],
-                key="model_split",
-            )
-            split_field = None
-            if split != "random":
-                options = (
-                    [declared_group]
-                    if declared_group
-                    else [f.id for f in ds.record.fields if (split != "time" or f.role.value == "timestamp")]
-                )
-                if options:
-                    split_field = st.selectbox(
-                        "Split field", options, format_func=ds.label, key="model_split_field"
-                    )
-            candidates, excluded = predictor_policy(ds, target, ds.frame.loc[ws.context().row_ids])
-            candidates = [f for f in candidates if f != split_field][:40]
-            predictors = st.multiselect(
-                "Permitted predictors",
-                candidates,
-                default=candidates,
-                format_func=ds.label,
-                key=f"predictors_{target}_{split}_{split_field}",
-            )
-            with st.expander("Excluded fields and protocol"):
-                for f, reason in excluded.items():
-                    st.caption(ds.label(f) + ": " + reason)
-                st.caption(
-                    "Seed 20261120 · at most 10,000 labeled rows · train-only preprocessing · 70/30 split."
-                )
-            hosted = st.checkbox(
-                "Include hosted TabPFN",
-                value=cfg.available("tabpfn"),
-                disabled=not cfg.available("tabpfn"),
-                key="model_hosted",
-            )
-            if not cfg.available("tabpfn"):
-                st.caption(
-                    "TabPFN is not configured. The same evaluation can run with actual local baselines."
-                )
-            if st.button(
-                "Evaluate predictive structure", type="primary", disabled=bool(ws.job_id) or not predictors
-            ):
-                try:
-                    start_model(ws, target, split, split_field, predictors, hosted)
-                    st.rerun()
-                except ValueError as exc:
-                    st.error(str(exc))
-    if ws.model:
-        import pandas as pd
-
-        run = ws.model
-        st.caption(
-            f"DIAGNOSTICS: {run.provider.upper()}  ·  {len(run.train_ids):,} TRAIN / {len(run.test_ids):,} HELD OUT"
-        )
-        st.dataframe(pd.DataFrame(run.metrics).T, alt="Held-out metrics for the evaluated models")
-        for warning in run.warnings:
-            st.caption(warning)
-        for f in inv.findings:
-            if f.family == "model":
-                finding_card(f, inv)
-    st.stop()
 
 if not ws.replay:
     with st.form("question_form", border=False):
@@ -245,6 +159,7 @@ if not any(f.family == "relationship" for f in inv.findings):
     st.caption(
         "No numeric pair met the configured association shortlist threshold (|r| or |ρ| ≥ 0.30 with adequate support). Distribution and group views can still be useful."
     )
+st.page_link("app_pages/explore.py", label="Explore another perspective", icon=":material/explore:")
 if ws.inspect_id:
     f = next((f for f in inv.findings if f.id == ws.inspect_id), None)
     if f:

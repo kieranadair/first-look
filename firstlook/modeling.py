@@ -34,6 +34,12 @@ from firstlook.providers.base import ProviderError
 def eligible_targets(dataset: Dataset) -> list[str]:
     found = []
     for f in dataset.record.fields:
+        if dataset.record.semantic_model and dataset.record.semantic_model.meaning(f.id).kind in {
+            "circular",
+            "coordinate",
+            "composition",
+        }:
+            continue
         s = dataset.frame[f.id].dropna()
         if f.excluded or len(s) < 200 or s.nunique() < 2:
             continue
@@ -48,6 +54,12 @@ def eligible_targets(dataset: Dataset) -> list[str]:
 
 def suggested_model_plan(dataset: Dataset, ctx: AnalysisContext) -> tuple[str, str, str | None] | None:
     """A visible, deterministic starting protocol; this is not an inferred scientific aim."""
+    if (
+        ctx.focus
+        and dataset.record.semantic_model
+        and dataset.record.semantic_model.meaning(ctx.focus).kind in {"coordinate", "circular", "composition"}
+    ):
+        return None
     targets = eligible_targets(dataset)
     if not targets:
         return None

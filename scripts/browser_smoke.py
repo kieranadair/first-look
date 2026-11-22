@@ -30,6 +30,9 @@ def main():
         page.goto(args.url)
         page.get_by_role("button", name="Explore example").first.click(timeout=45000)
         page.get_by_role("button", name="Investigate this dataset").click(timeout=30000)
+        page.get_by_role("heading", name="Get the lay of the land.", exact=True).wait_for(timeout=30000)
+        page.get_by_role("button", name="Inspect this perspective", exact=True).wait_for(timeout=45000)
+        page.get_by_role("link", name="Findings", exact=True).click()
         page.get_by_role("button", name="Inspect", exact=True).first.wait_for(timeout=45000)
         expect(page.locator('[data-testid="stEChartsChart"]')).to_have_count(6, timeout=20000)
         expect(page.locator(".stApp")).to_have_css("background-color", "rgb(246, 248, 252)")
@@ -55,9 +58,9 @@ def main():
         # Click a rendered data mark, then exercise the actual ECharts selection protocol.
         chart.locator('svg path[fill="#4169D8"]').first.click(force=True)
         page.get_by_role("button", name="Apply selected rows", exact=True).click(timeout=15000)
-        page.get_by_role("button", name="Reset selection", exact=True).click(timeout=15000)
+        page.get_by_role("button", name="Return to reference", exact=True).click(timeout=15000)
         checks["echarts_selection_apply_reset"] = True
-        page.get_by_role("button", name="Run local investigation", exact=True).click()
+        # Returning restores the original investigation; no rebuild is needed.
         page.get_by_role("button", name="Pin", exact=True).first.click(timeout=45000)
         page.get_by_role("button", name="Pinned", exact=True).first.wait_for(timeout=15000)
         page.get_by_role("link", name="Evidence", exact=True).click()

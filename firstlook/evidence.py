@@ -107,6 +107,18 @@ def brief(workspace: Workspace) -> str:
             lines += ["Limitation: " + caveat, ""]
         if p.get("note"):
             lines += ["User interpretation: " + p["note"], ""]
+    for i, bundle in enumerate(workspace.comparisons, 1):
+        lines += [
+            f"## Comparison {i}",
+            "",
+            f"Selected rows: {len(bundle.spec.selection.rows):,}; reference rows: {len(bundle.spec.reference_rows):,}. Reference: {bundle.spec.reference}; denominator: {bundle.spec.denominator}; selection unit: {bundle.spec.selection.policy}.",
+            "",
+            f"Recorded comparison: {bundle.id}",
+            "",
+        ]
+        lines += [message + "\n" for message in bundle.exclusions]
+        if bundle.interpretation.get("synthesis"):
+            lines += ["Model interpretation: " + bundle.interpretation["synthesis"]["interpretation"], ""]
     if workspace.model:
         m = workspace.model
         lines += [
@@ -152,6 +164,15 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
         "analysis/challenges.json": json_bytes([c.model_dump(mode="json") for c in inv.challenges]),
         "analysis/decisions.json": json_bytes([d.model_dump(mode="json") for d in inv.decisions]),
         "analysis/search.json": json_bytes(inv.candidate_log),
+        "analysis/coverage.json": json_bytes(inv.coverage),
+        "analysis/opened.json": json_bytes(sorted(workspace.opened)),
+        "analysis/related.json": json_bytes(inv.related_views),
+        "analysis/comparisons.json": json_bytes(
+            {
+                "saved": [b.model_dump(mode="json") for b in workspace.comparisons],
+                "active": workspace.comparison.model_dump(mode="json") if workspace.comparison else None,
+            }
+        ),
         "analysis/terra.json": json_bytes(inv.terra),
         "notes.json": json_bytes(workspace.pins),
         "environment.json": json_bytes(environment()),
@@ -178,7 +199,7 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
         files[data_name] = raw
     files["manifest.json"] = json_bytes(
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "app": "First Look",
             "data_file": data_name,
             "fingerprint": ds.record.fingerprint,
@@ -233,7 +254,7 @@ def read_bundle(data: bytes) -> dict[str, bytes]:
         manifest = json.loads(files["manifest.json"])
         if not isinstance(manifest, dict):
             raise ValueError("The investigation manifest must be an object.")
-        if manifest.get("schema_version") not in {1, 2} or manifest.get("app") != "First Look":
+        if manifest.get("schema_version") not in {1, 2, 3} or manifest.get("app") != "First Look":
             raise ValueError("Unsupported investigation format.")
         return files
     except (zipfile.BadZipFile, KeyError, json.JSONDecodeError, RuntimeError, NotImplementedError) as exc:
@@ -279,6 +300,19 @@ def import_bundle(
 
         ds = Dataset(record, pd.DataFrame(columns=pd.Index([f.id for f in record.fields])), None)
     inv = Investigation(ctx)
+    inv.coverage = json.loads(files.get("analysis/coverage.json", b"[]"))
+    inv.related_views = json.loads(files.get("analysis/related.json", b"{}"))
+    if (
+        not isinstance(inv.coverage, list)
+        or len(inv.coverage) > 20
+        or not isinstance(inv.related_views, dict)
+        or len(inv.related_views) > 18
+    ):
+        raise ValueError("Invalid recorded exploration scope.")
+    from firstlook.exploration_contracts import PerspectiveCoverage
+
+    for item in inv.coverage:
+        PerspectiveCoverage.model_validate(item)
     inv.semantic_decisions = json.loads(files.get("semantics/decisions.json", b"[]"))
     if not isinstance(inv.semantic_decisions, list) or len(inv.semantic_decisions) > 2000:
         raise ValueError("Invalid semantic decision ledger.")
@@ -311,6 +345,14 @@ def import_bundle(
             raise ValueError("A finding refers to a missing result.")
         if f.chart.result_id != f.result_id or f.chart.context != ctx.id:
             raise ValueError("A chart refers to mismatched evidence.")
+    for primary, link in inv.related_views.items():
+        if (
+            not isinstance(link, dict)
+            or primary not in inv.results
+            or link.get("companion") not in inv.results
+            or set(link) - {"companion", "intent"}
+        ):
+            raise ValueError("A companion refers to missing or unsupported evidence.")
     pins = json.loads(files["notes.json"])
     if not isinstance(pins, list) or len(pins) > 100:
         raise ValueError("Invalid pinned evidence.")
@@ -341,6 +383,31 @@ def import_bundle(
         replay=True,
         semantic_review=json.loads(files.get("profiles/semantic-review.json", b"{}")),
     )
+    from firstlook.comparison import validate_bundle, dataset_for_bundle
+    from firstlook.exploration_contracts import ComparisonBundle
+
+    comparisons = json.loads(files.get("analysis/comparisons.json", b'{"saved":[],"active":null}'))
+    if (
+        not isinstance(comparisons, dict)
+        or set(comparisons) != {"saved", "active"}
+        or not isinstance(comparisons["saved"], list)
+        or len(comparisons["saved"]) > 3
+    ):
+        raise ValueError("Invalid comparison board collection.")
+    ws.comparisons = [ComparisonBundle.model_validate(item) for item in comparisons["saved"]]
+    ws.comparison = ComparisonBundle.model_validate(comparisons["active"]) if comparisons["active"] else None
+    for item in ws.comparisons + ([ws.comparison] if ws.comparison else []):
+        if item is ws.comparison and item.spec.selection.base.id != ctx.id:
+            raise ValueError("The active comparison belongs to another anchored context.")
+        own_dataset = dataset_for_bundle(item, ds)
+        validate_bundle(item, own_dataset if raw is not None else None)
+    if ws.comparison:
+        ws.selection = ws.comparison.spec.selection
+        ws.cohort_revision = ws.selection.revision
+    opened = json.loads(files.get("analysis/opened.json", b"[]"))
+    if not isinstance(opened, list) or len(opened) > 2000 or not all(isinstance(i, str) for i in opened):
+        raise ValueError("Invalid recorded opened-view state.")
+    ws.opened = set(opened)
     if "model/run.json" in files:
         ws.model = ModelRun.model_validate_json(files["model/run.json"])
         if ws.model.context != ctx.id or set(ws.model.train_ids) & set(ws.model.test_ids):
@@ -349,6 +416,10 @@ def import_bundle(
         inv.model_runs = [ModelRun.model_validate(m) for m in json.loads(files["model/history.json"])]
     elif ws.model:
         inv.model_runs = [ws.model]
+    from firstlook.comparison import validate_model_slice
+
+    for bundle in ws.comparisons + ([ws.comparison] if ws.comparison else []):
+        validate_model_slice(bundle, inv.model_runs)
     return ws
 
 
@@ -363,6 +434,9 @@ def recompute(workspace: Workspace) -> list[dict]:
         if saved.plan.operation == "model_diagnostic":
             checks.append({"result": rid, "status": "recorded-model-output"})
             continue
+        if "recipe_version" not in saved.plan.params:
+            checks.append({"result": rid, "status": "legacy-recipe-inspection-only"})
+            continue
         actual, _ = analyze(workspace.dataset, inv.context, saved.plan)
         same = actual.model_dump(mode="json") == saved.model_dump(mode="json")
         checks.append({"result": rid, "status": "match" if same else "different"})
@@ -373,6 +447,9 @@ def recompute(workspace: Workspace) -> list[dict]:
         if finding is None or (saved.result and saved.result.plan.operation == "model_diagnostic"):
             checks.append({"result": saved.id, "status": "recorded-model-output"})
             continue
+        if "recipe_version" not in inv.results[finding.result_id].plan.params:
+            checks.append({"result": saved.id, "status": "legacy-recipe-inspection-only"})
+            continue
         # Explicit group choice is encoded in the check ID and retained in its metadata.
         group = saved.result.metadata.get("group_field") if saved.result else None
         if saved.id == digest([finding.id, saved.operation, None]):
@@ -380,4 +457,48 @@ def recompute(workspace: Workspace) -> list[dict]:
         actual = challenge(workspace.dataset, inv, finding, saved.operation, group)
         same = actual.model_dump(mode="json") == saved.model_dump(mode="json")
         checks.append({"result": saved.id, "status": "match" if same else "different"})
+    from firstlook.comparison import build_comparison, dataset_for_bundle
+
+    unique = {b.id: b for b in workspace.comparisons}
+    if workspace.comparison:
+        unique[workspace.comparison.id] = workspace.comparison
+    for bundle in unique.values():
+        own_dataset = dataset_for_bundle(bundle, workspace.dataset)
+        spec = bundle.spec
+        recorded_model = bundle.recorded_model or (
+            next((m for m in inv.model_runs if m.id == bundle.model_slice.get("model_run")), None)
+            if bundle.model_slice
+            else None
+        )
+        actual = build_comparison(
+            own_dataset,
+            spec.selection,
+            spec.operation,
+            measure=spec.measure,
+            metric=spec.metric,
+            groups=spec.group_by,
+            reference=spec.reference,
+            denominator=spec.denominator,
+            model=recorded_model,
+        )
+        before = bundle.model_dump(mode="json", exclude={"interpretation", "checks", "decisions"})
+        after = actual.model_dump(mode="json", exclude={"interpretation", "checks", "decisions"})
+        checks.append({"result": bundle.id, "status": "match" if before == after else "different"})
+        for saved in bundle.checks:
+            view = next(v for v in bundle.views if v.finding.id == saved.parent_id)
+            child = Investigation(
+                view.context, findings=[view.finding], results={view.result.id: view.result}
+            )
+            group = saved.result.metadata.get("group_field") if saved.result else None
+            if saved.id == digest([view.finding.id, saved.operation, None]):
+                group = None
+            actual_check = challenge(own_dataset, child, view.finding, saved.operation, group)
+            checks.append(
+                {
+                    "result": saved.id,
+                    "status": "match"
+                    if actual_check.model_dump(mode="json") == saved.model_dump(mode="json")
+                    else "different",
+                }
+            )
     return checks

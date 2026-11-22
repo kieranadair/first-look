@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from firstlook.contracts import ModelRun
 from firstlook.discovery import Investigation
 from firstlook.ingest import Dataset
+from firstlook.exploration_contracts import CohortSelection, ComparisonBundle
 
 
 @dataclass
@@ -32,6 +33,15 @@ class Workspace:
     followups: int = 0
     semantic_review: dict = field(default_factory=dict)
     semantic_review_count: int = 0
+    selection: CohortSelection | None = None
+    comparison: ComparisonBundle | None = None
+    comparisons: list[ComparisonBundle] = field(default_factory=list)
+    cohort_revision: int = 0
+    opened: set[str] = field(default_factory=set)
+    job_revision: int = 0
+    comparison_review_count: int = 0
+    return_state: dict = field(default_factory=dict)
+    explore_id: str | None = None
 
     def context(self):
         if self.dataset is None:
@@ -43,6 +53,70 @@ class Workspace:
         self.model_count = 0
         self.followups = 0
         self.inspect_id = self.challenge_id = None
+        self.selection, self.comparison = None, None
+        self.opened = set()
+        self.cohort_revision += 1
+        self.comparison_review_count = 0
+        self.return_state = {}
+        self.explore_id = None
+
+    def begin_filtered(self):
+        if self.selection is None or self.selection.base.id != self.context().id:
+            raise ValueError("Preview a cohort in the current reference first.")
+        saved = {
+            name: getattr(self, name)
+            for name in [
+                "rows",
+                "focus",
+                "assumption",
+                "investigation",
+                "model",
+                "model_count",
+                "followups",
+                "comparisons",
+                "comparison",
+                "selection",
+                "opened",
+                "cohort_revision",
+                "comparison_review_count",
+            ]
+        }
+        saved["context"] = self.context().id
+        rows = list(self.selection.rows)
+        self.rows = rows
+        self.invalidate()
+        self.return_state = saved
+
+    def return_to_anchor(self):
+        saved = self.return_state
+        if not saved or self.dataset is None:
+            raise ValueError("No anchored investigation is available.")
+        if self.dataset.context(saved["rows"], saved["focus"], saved["assumption"]).id != saved["context"]:
+            self.return_state = {}
+            raise ValueError("The anchored meanings changed. Run a new investigation.")
+        for name, value in saved.items():
+            if name != "context":
+                setattr(self, name, value)
+        self.return_state = {}
+
+    def bound_views(self):
+        ids = {b.id for b in self.comparisons}
+        if self.comparison:
+            ids.add(self.comparison.id)
+        allowance = max(1, 18 - 2 * len(ids))
+        if self.investigation and len(self.investigation.findings) > allowance:
+            self.investigation.findings = self.investigation.findings[:allowance]
+            retained = {f.id for f in self.investigation.findings}
+            results = {f.result_id for f in self.investigation.findings}
+            self.investigation.results = {k: v for k, v in self.investigation.results.items() if k in results}
+            self.investigation.challenges = [
+                c for c in self.investigation.challenges if c.parent_id in retained
+            ]
+            self.investigation.related_views = {
+                k: v
+                for k, v in self.investigation.related_views.items()
+                if k in results and v["companion"] in results
+            }
 
     def load(self, dataset: Dataset):
         from firstlook.profiling import profile
@@ -53,6 +127,7 @@ class Workspace:
         self.assumption = "unknown"
         self.invalidate()
         self.pins = []
+        self.comparisons = []
         self.inspect_id = self.challenge_id = None
         self.replay = False
         self.semantic_review = {}

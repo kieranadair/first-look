@@ -13,10 +13,16 @@ from firstlook.contracts import ChartSpec, ResultArtifact, digest
 PALETTE = ["#4169D8", "#209589", "#C67049", "#9774BD", "#A58A30", "#647B9C", "#CD7099", "#5598B0"]
 
 
+def category_label(record):
+    return str(record["label"]) + (" (pooled)" if record.get("other") else "")
+
+
 def axis_domains(spec: ChartSpec, result: ResultArtifact) -> dict[str, tuple[float, float]]:
     """One explicit domain policy for the interactive and offscreen renderers."""
     rows = result.records
     domains = {}
+    if result.metadata.get("comparison_domains"):
+        return {k: tuple(v) for k, v in result.metadata["comparison_domains"].items()}
 
     def span(axis: str, keys: list[str], zero: bool = False):
         values = [
@@ -46,10 +52,14 @@ def axis_domains(spec: ChartSpec, result: ResultArtifact) -> dict[str, tuple[flo
     if spec.template == "scatter":
         span("x", ["x"])
         span("y", ["y"])
+        for axis, bounds in result.metadata.get("full_pair_domains", {}).items():
+            lo, hi = bounds
+            pad = (hi - lo) * 0.05 if hi > lo else max(abs(hi) * 0.05, 1)
+            domains[axis] = (lo - pad, hi + pad)
     elif spec.template == "histogram":
         span("x", ["left", "right"] if "left" in rows[0] else ["x"])
         span("y", ["value"], True)
-    elif spec.template in {"bar", "dot"}:
+    elif spec.template in {"bar", "dot", "facet"}:
         span("x", ["value"], spec.template == "bar")
         if result.metadata.get("proportion"):
             domains["x"] = (0.0, 1.0)
@@ -60,7 +70,15 @@ def axis_domains(spec: ChartSpec, result: ResultArtifact) -> dict[str, tuple[flo
     elif spec.template in {"line", "ecdf"}:
         if not result.metadata.get("time_axis"):
             span("x", ["x"])
-        span("y", ["value"])
+        else:
+            stamps = [
+                cast(Any, pd.Timestamp(r["x"])).timestamp() * 1000 for r in rows if r.get("x") is not None
+            ]
+            if stamps:
+                lo, hi = min(stamps), max(stamps)
+                pad = (hi - lo) * 0.03 if hi > lo else 86400000
+                domains["x"] = (lo - pad, hi + pad)
+        span("y", ["value", "q1", "q3"] if result.metadata.get("conditional_spread") else ["value"])
         if spec.template == "ecdf":
             domains["y"] = (0.0, 1.0)
     return domains
@@ -71,6 +89,23 @@ class CompiledChart:
     options: dict
     row_map: dict[tuple[int, int], list[int]]
     mapping_hash: str
+
+
+def plotting_records(spec, result, source=None):
+    """CDF endpoint extensions are display geometry, never invented observations."""
+    rows = result.records if source is None else source
+    if spec.template != "ecdf":
+        return rows
+    lo, hi = axis_domains(spec, result)["x"]
+    groups = list(dict.fromkeys(r.get("group", "") for r in rows))
+    output = []
+    for group in groups:
+        subset = [r for r in rows if r.get("group", "") == group]
+        identity = {"group": group} if "group" in subset[0] else {}
+        output.append({"x": lo, "value": 0.0, "row_ids": [], "endpoint_extension": True, **identity})
+        output.extend({**r, "endpoint_extension": False} for r in subset)
+        output.append({"x": hi, "value": 1.0, "row_ids": [], "endpoint_extension": True, **identity})
+    return output
 
 
 def validate_chart(spec: ChartSpec, result: ResultArtifact) -> None:
@@ -92,7 +127,8 @@ def compile_chart(spec: ChartSpec, result: ResultArtifact, dark: bool = False) -
     validate_chart(spec, result)
     ink = "#B5C4DB" if dark else "#58677F"
     grid = "#2B3A51" if dark else "#E5EAF3"
-    rows = result.records
+    rows = plotting_records(spec, result)
+    base_color = result.metadata.get("comparison_color", PALETTE[0])
     options: dict[str, Any] = {
         "animationDuration": 250,
         "animationDurationUpdate": 250,
@@ -150,10 +186,14 @@ def compile_chart(spec: ChartSpec, result: ResultArtifact, dark: bool = False) -
             options["legend"] = {"top": 0}
     elif spec.template in {"bar", "dot"}:
         install(
-            rows,
+            [{**r, "position": i} for i, r in enumerate(rows)],
             "bar" if spec.template == "bar" else "scatter",
-            {"x": "value", "y": "label", "tooltip": ["label", "value"]},
-            color=PALETTE[0],
+            {
+                "x": "value",
+                "y": "position",
+                "tooltip": ["label", "value", *(["n", "member_rows"] if "member_rows" in rows[0] else [])],
+            },
+            color=base_color,
         )
         y_axis.update(
             {
@@ -161,6 +201,7 @@ def compile_chart(spec: ChartSpec, result: ResultArtifact, dark: bool = False) -
                 "name": "",
                 "inverse": True,
                 "axisLabel": {"color": ink, "width": 125, "overflow": "truncate"},
+                "data": [category_label(r) for r in rows],
             }
         )
         if spec.template == "bar":
@@ -188,26 +229,77 @@ def compile_chart(spec: ChartSpec, result: ResultArtifact, dark: bool = False) -
         x_axis.update({"type": "category"})
         series[0]["itemStyle"] = {"color": "#C3D1F7", "borderColor": PALETTE[0]}
     elif spec.template in {"line", "ecdf"}:
-        install(rows, "line", {"x": "x", "y": "value", "tooltip": ["x", "value"]}, color=PALETTE[0])
         x_axis["type"] = "time" if result.metadata.get("time_axis") else "value"
-        series[0]["connectNulls"] = False
-        series[0]["symbolSize"] = 6
-        series[0]["lineStyle"] = {"width": 2.5}
-        if result.plan.operation == "metric":
-            series[0]["encode"]["tooltip"] = ["x", "value", "n", "synthetic", "complete"]
-            if any(r.get("synthetic") for r in rows):
-                series[0]["lineStyle"] = {"width": 2.5, "type": "dashed"}
-        if spec.template == "ecdf":
-            series[0]["step"] = "end"
-    elif spec.template == "heatmap":
+        groups = list(dict.fromkeys(str(r.get("group", "")) for r in rows))
+        for i, group in enumerate(groups):
+            subset = [r for r in rows if str(r.get("group", "")) == group]
+            tooltip = [
+                k
+                for k in [
+                    "x",
+                    "value",
+                    "q1",
+                    "q3",
+                    "n",
+                    "synthetic",
+                    "complete",
+                    "original_value",
+                    "date",
+                    "endpoint_extension",
+                ]
+                if k in rows[0]
+            ]
+            install(
+                subset,
+                "line",
+                {"x": "x", "y": "value", "tooltip": tooltip},
+                group,
+                base_color if len(groups) == 1 else PALETTE[i % 8],
+            )
+            series[-1].update(
+                connectNulls=False,
+                symbolSize=4,
+                lineStyle={
+                    "width": 2.3,
+                    "type": "dashed" if any(r.get("synthetic") for r in subset) else "solid",
+                },
+            )
+            if spec.template == "ecdf":
+                series[-1]["step"] = "end"
+            if result.metadata.get("conditional_spread"):
+                for key, label in [("q1", "25th percentile"), ("q3", "75th percentile")]:
+                    install(subset, "line", {"x": "x", "y": key, "tooltip": tooltip}, label, PALETTE[1])
+                    series[-1].update(
+                        connectNulls=False, showSymbol=False, lineStyle={"type": "dashed", "width": 1.5}
+                    )
+        if len(series) > 1:
+            options["legend"] = {"top": 0, "textStyle": {"color": ink}}
+    elif spec.template in {"heatmap", "density"}:
         xs = list(dict.fromkeys(str(r["x"]) for r in rows))
         ys = list(dict.fromkeys(str(r["y"]) for r in rows))
         heat = [{**r, "x": xs.index(str(r["x"])), "y": ys.index(str(r["y"]))} for r in rows]
-        install(heat, "heatmap", {"x": "x", "y": "y", "value": "value", "tooltip": ["value"]})
+        install(
+            heat,
+            "heatmap",
+            {
+                "x": "x",
+                "y": "y",
+                "value": "value",
+                "tooltip": [
+                    k
+                    for k in ["value", "count", "denominator", "left", "right", "bottom", "top"]
+                    if k in rows[0]
+                ],
+            },
+        )
+        if spec.template == "density":
+            xe, ye = result.metadata["numeric_grid"]["x_edges"], result.metadata["numeric_grid"]["y_edges"]
+            xs = [f"{a:.3g}–{b:.3g}" for a, b in zip(xe, xe[1:])]
+            ys = [f"{a:.3g}–{b:.3g}" for a, b in zip(ye, ye[1:])]
         x_axis.update({"type": "category", "data": xs})
         y_axis.update({"type": "category", "data": ys})
         options["visualMap"] = {
-            "min": 0,
+            "min": min(0, min(r["value"] for r in rows)),
             "max": max(r["value"] for r in rows),
             "calculable": False,
             "orient": "horizontal",
@@ -215,9 +307,62 @@ def compile_chart(spec: ChartSpec, result: ResultArtifact, dark: bool = False) -
             "inRange": {"color": ["#E8EFFC", "#4169D8", "#182F72"]},
         }
         options["grid"]["bottom"] = 95
+    elif spec.template == "facet":
+        facets = list(dict.fromkeys(r["facet"] for r in rows))
+        labels = list(dict.fromkeys(r["label"] for r in rows))
+        options["grid"], options["xAxis"], options["yAxis"], options["title"] = [], [], [], []
+        domain = axis_domains(spec, result).get("x", (0, 1))
+        for i, facet in enumerate(facets):
+            left = 100 * i / len(facets)
+            options["grid"].append(
+                {
+                    "left": f"{left + 2}%",
+                    "width": f"{100 / len(facets) - 4}%",
+                    "top": 44,
+                    "bottom": 65,
+                    "containLabel": True,
+                }
+            )
+            options["title"].append(
+                {
+                    "text": str(facet),
+                    "left": f"{left + 3}%",
+                    "textStyle": {"fontSize": 12, "color": ink},
+                    "top": 4,
+                }
+            )
+            options["xAxis"].append(
+                {
+                    "type": "value",
+                    "gridIndex": i,
+                    "min": domain[0],
+                    "max": domain[1],
+                    "axisLabel": {"color": ink},
+                    "splitLine": {"lineStyle": {"color": grid}},
+                }
+            )
+            options["yAxis"].append(
+                {
+                    "type": "category",
+                    "gridIndex": i,
+                    "data": labels,
+                    "inverse": True,
+                    "axisLabel": {"color": ink, "width": 80, "overflow": "truncate"},
+                }
+            )
+            subset = [{**r, "position": labels.index(r["label"])} for r in rows if r["facet"] == facet]
+            install(
+                subset,
+                "bar",
+                {"x": "value", "y": "position", "tooltip": ["facet", "label", "value", "n"]},
+                str(facet),
+                base_color,
+            )
+            series[-1].update(xAxisIndex=i, yAxisIndex=i, barMaxWidth=22)
     options["dataset"], options["series"] = datasets, series
-    for axis, (lo, hi) in axis_domains(spec, result).items():
-        options[axis + "Axis"].update(min=lo, max=hi, scale=True)
+    if spec.template != "facet":
+        for axis, (lo, hi) in axis_domains(spec, result).items():
+            options[axis + "Axis"].update(min=lo, max=hi, scale=True)
     if spec.scale == "log":
         y_axis["type"] = "log"
     return CompiledChart(options, mapping, digest([[list(k), v] for k, v in mapping.items()]))

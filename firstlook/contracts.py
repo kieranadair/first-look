@@ -124,7 +124,9 @@ class ChartSpec(Contract):
     id: str
     result_id: str
     context: str
-    template: Literal["bar", "dot", "histogram", "ecdf", "scatter", "box", "line", "heatmap"]
+    template: Literal[
+        "bar", "dot", "histogram", "ecdf", "scatter", "box", "line", "heatmap", "density", "facet"
+    ]
     x_label: str
     y_label: str
     units: str = ""
@@ -217,6 +219,11 @@ class HypothesisProposal(Contract):
         "semantic_unit",
         "semantic_denominator",
         "semantic_gaps",
+        "semantic_time_aggregation",
+        "group_shape",
+        "density",
+        "influence",
+        "binning",
         "none",
     ]
     finding_id: str

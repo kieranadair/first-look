@@ -1,0 +1,95 @@
+{
+  "date": "2026-11-22",
+  "app_version": "0.2.0",
+  "source_commit": "6f151db7d8ebcee485769c44dc24615b0c592c0f",
+  "scope": "Read-only synthetic source/artifact audit for next-uplift design; no runtime changes, UI screenshots or live provider calls.",
+  "probes": {
+    "ranking_and_residuals": {
+      "scope": "Read-only synthetic design audit; no application changes or live APIs.",
+      "top_k": {
+        "actual_group_totals": {
+          "Frequent small": 40,
+          "Medium": 40,
+          "Rare large": 1000
+        },
+        "displayed": [
+          {
+            "label": "Frequent small",
+            "value": 40.0
+          },
+          {
+            "label": "Other recorded groups",
+            "value": 1040.0
+          }
+        ],
+        "rare_largest_named": false
+      },
+      "signed_residuals": {
+        "sum": 0.0,
+        "RMSE": 8.16496580927726,
+        "claim": "Zero signed residual sum is compatible with substantial error."
+      },
+      "comparison_domains": {
+        "original": {
+          "x": [
+            0.0,
+            1100.0
+          ]
+        }
+      },
+      "book_scope": "Part II, introduction and Chapters 5\u201311; no Part III SPC."
+    },
+    "ecdf": {
+      "scope": "Read-only synthetic audit of current result data and native chart spec, no screenshots or app edits",
+      "source_rows": 50000,
+      "distinct_values": 1201,
+      "plotted_locations": 1200,
+      "omitted_high_mass_location": true,
+      "exact_F_at_1199": 0.99998,
+      "rendered_post_step_F_at_1199": 0.02398,
+      "absolute_CDF_error_at_1199": 0.976,
+      "native_step": "end",
+      "warning": [
+        "The staircase uses at most 1,200 exact quantile locations; source rows between these locations are not selectable."
+      ],
+      "qualification": "This measures vertical CDF error at a threshold. It does not measure visual salience at full scale; the horizontal displacement is one data unit."
+    },
+    "relationships": {
+      "scatter": {
+        "statistical_rows": 6000,
+        "displayed_marks": 5000,
+        "sampled_flag": false,
+        "warnings": []
+      },
+      "symmetric_branches": {
+        "rows": 400,
+        "pearson": 0.0,
+        "conditional_medians": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "conditional_IQRs": [
+          40.5,
+          120.5,
+          200.5,
+          280.5,
+          360.5
+        ],
+        "shortlisted_relationships": [],
+        "current_line_value_encoding": {
+          "x": "x",
+          "y": "value",
+          "tooltip": [
+            "x",
+            "value"
+          ]
+        },
+        "quartiles_present_in_artifact_but_not_chart_encoding": true
+      },
+      "limits": "Synthetic source/artifact inspection only; no chart images or live UI were inspected, and no runtime code was edited."
+    }
+  }
+}

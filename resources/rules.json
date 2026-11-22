@@ -173,6 +173,48 @@
       "tests": [
         "test_declared_model_group_and_prediction_availability_apply_to_every_model"
       ]
+    },
+    "EXP-COMP": {
+      "name": "Keep the comparison coherent",
+      "requirement": "Record the reference, cohort and denominator; compare stable category identities with compatible scales and bins. Preserve original definitions in saved boards.",
+      "evidence": "Few Part II Chapters 5, 10–11; Gleicher et al. 2011; few-part-ii-review.md R19. Comparison layout remains a design choice, not a measured productivity result.",
+      "source": "https://graphics.cs.wisc.edu/Papers/2011/GAWJHR11/paper.pdf",
+      "tests": [
+        "test_comparison_freezes_categories_and_denominator_scope",
+        "test_multi_context_comparison_roundtrip_and_fresh_process"
+      ]
+    },
+    "EXP-SHAPE": {
+      "name": "Inspect center, spread and shape separately",
+      "requirement": "Zero signed association or a flat conditional median does not establish independence. Preserve quartiles, support and the recorded pairs; do not infer clusters or causes from appearance.",
+      "evidence": "Few Part II Chapters 6 and 9; Matejka and Fitzmaurice 2017; independent variance-only counterexamples.",
+      "source": "https://www.research.autodesk.com/publications/same-stats-different-graphs/",
+      "tests": [
+        "test_variance_only_structure_is_proposed_and_quartiles_are_rendered",
+        "test_group_comparison_uses_full_cdf_and_quantile_values"
+      ]
+    },
+    "EXP-SCOPE": {
+      "name": "Separate calculation from display approximation",
+      "requirement": "Report statistics, displayed marks and review reductions separately. CDF compression certifies vertical error; exact threshold queries use source values. Endpoint extensions have no source members.",
+      "evidence": "Mathematical definition and independent source-threshold oracles in few-part-ii-probes.json and test_exploration.py; not a visual-salience experiment.",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/few-part-ii-review.md",
+      "tests": [
+        "test_cdf_bound_uses_independent_threshold_oracle",
+        "test_display_scope_distinguishes_statistics_and_marks",
+        "test_constant_cdf_renders_jump_and_extensions_without_inventing_members"
+      ]
+    },
+    "EXP-TIME": {
+      "name": "Retain chronological and observation context",
+      "requirement": "Show raw evidence alongside complete-window or calendar companions. Preserve unknown dates, compatible reference bases and original values; smoothing and recurring phase do not establish a forecast.",
+      "evidence": "Few Part II Chapter 8; Forecasting: Principles and Practice, graphics and decomposition; engineering completeness limits are explicit.",
+      "source": "https://otexts.com/fpp3/graphics.html",
+      "tests": [
+        "test_complete_trailing_windows_have_independent_known_values",
+        "test_calendar_phase_preserves_full_cycles_and_original_dates",
+        "test_common_baseline_is_same_date_and_preserves_original_values"
+      ]
     }
   },
   "scope": "The studies motivate conditional design patterns. Thresholds and budgets are engineering choices; this integrated app has not undergone a user study. Few's corpus is expert guidance, not one experimentally validated universal algorithm."

@@ -94,3 +94,65 @@ def test_meaning_workspace_confirm_define_and_run_metric():
     assert inv.findings[0].family == "metric"
     assert sum(r["value"] for r in inv.results[inv.findings[0].result_id].records) == 100
     assert any(c.operation == "semantic_reconciliation" for c in inv.challenges)
+
+
+def test_comparison_has_adjacent_visible_evidence_and_return_action():
+    from firstlook.comparison import build_comparison, preview
+
+    ws = Workspace()
+    ws.load(load_example("semantic"))
+    ws.investigation = discover(ws.dataset)
+    ids = ws.dataset.frame.index[ws.dataset.frame["f004"].eq("Furniture")].tolist()
+    preview(ws, ids, "predicate", "mapping")
+    ws.comparison = build_comparison(ws.dataset, ws.selection, "ecdf", measure="f006")
+    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "streamlit_app.py", default_timeout=30)
+    app.session_state["workspace"] = ws
+    app.run().switch_page("app_pages/compare.py").run()
+    assert not app.exception and len(app.get("echarts_chart")) == 2
+    assert any("Differences across" in m.value for m in app.markdown)
+    assert not any("chart" in e.label.lower() for e in app.expander)
+    app.button(key="filter_cohort").click().run()
+    assert not app.exception and ws.rows == ids and ws.investigation is None
+    app.switch_page("app_pages/discover.py").run()
+    app.button(key="global_reset").click().run()
+    assert not app.exception and ws.rows is None and ws.investigation is not None
+    app.switch_page("app_pages/models.py").run()
+    assert not app.exception
+
+
+def test_changed_cohort_rejects_completed_earlier_comparison(monkeypatch):
+    from types import SimpleNamespace
+    from firstlook.comparison import build_comparison, preview
+    import firstlook.ui.runtime as runtime
+
+    ws = Workspace()
+    ws.load(load_example("semantic"))
+    ws.investigation = discover(ws.dataset)
+    preview(ws, list(range(30)), "predicate", "mapping")
+    old = build_comparison(ws.dataset, ws.selection, "ecdf", measure="f006")
+    old_revision = ws.selection.revision
+    preview(ws, list(range(40)), "predicate", "mapping")
+    ws.job_id, ws.job_kind, ws.job_revision = "controlled", "comparison", old_revision
+    job = SimpleNamespace(state="completed", context=ws.context().id, result=old)
+    manager = SimpleNamespace(get=lambda *a: job, forget=lambda *a: None)
+    monkeypatch.setattr(runtime, "manager", lambda: manager)
+    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "streamlit_app.py", default_timeout=30)
+    app.session_state["workspace"] = ws
+    app.run()
+    assert not app.exception and ws.comparison is None and ws.job_id is None
+
+
+def test_recorded_models_show_related_diagnostics_without_reopening_configuration():
+    from firstlook.modeling import run_model, diagnostic_findings
+
+    ws = Workspace()
+    ws.load(load_example("semantic"))
+    ws.investigation = discover(ws.dataset)
+    ws.model = run_model(ws.dataset, ws.context(), "f006", "group", "f001")
+    diagnostic_findings(ws.dataset, ws.investigation, ws.model)
+    app = AppTest.from_file(Path(__file__).resolve().parents[1] / "streamlit_app.py", default_timeout=30)
+    app.session_state["workspace"] = ws
+    app.run().switch_page("app_pages/models.py").run()
+    assert not app.exception and len(app.get("echarts_chart")) == 2
+    assert len(app.get("multiselect")) == 0
+    assert any("TRAIN /" in caption.value for caption in app.caption)

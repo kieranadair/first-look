@@ -1,0 +1,12 @@
+{
+  "perspective_coverage": true,
+  "conditional_companions": true,
+  "preview_preserves_reference": true,
+  "builder_collapses_after_preview": true,
+  "comparison_board": true,
+  "preserved_comparison_export": true,
+  "filter_and_return_restore_investigation": true,
+  "dedicated_models_page": true,
+  "live_provider_calls": false,
+  "screenshots_video_traces": false
+}
