@@ -2,6 +2,8 @@
 
 Updated 23 November 2026 after the chart design audit of First Look 0.3. Read the [chart audit](../research/chart-design-audit.md) for rendering constraints and provider guidance, and [UI refinement](ui-uplift.md) for the surrounding presentation.
 
+Deployment follow-up: 0.3.1 adds a loaded compiler marker under **About this workbench**. On 23 November the public Cloud Penguins example rendered an approximately 335×165 scatter area, unrotated unitless labels and safeguards without `CHART-SCATTER-ASPECT`, despite its source link targeting this repository's `main` at `b08d053`. This establishes an older live rendering path, not its exact deployed SHA or whether stale imported modules versus an unapplied build caused it. GitHub/CI success must not be reported as live deployment verification. See [deployment troubleshooting](../../deployment/README.md#confirming-a-deployed-update); the expected markers are First Look 0.3.1 and Chart renderer 2026-11-23.1. An owner reboot remains necessary if Cloud does not load the update automatically. No live reboot was performed from the public visitor session.
+
 ## Product and architecture
 
 First Look is a Python-only open-source visual investigation workbench. Eight visible native Streamlit work areas and a hidden linked Inspect finding detail route: Understand, Meaning, Explore, Findings, Compare, Models, Challenge, Evidence. The original `discover.py` path remains the Findings page. Python 3.12, Streamlit 1.67. Runtime requirements are pinned; Pint is the only added runtime dependency in this uplift. No SaaS/account/database layer, local foundation-model weights, authored frontend or data lineage system.

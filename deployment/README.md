@@ -11,6 +11,16 @@ Run and deploy from the repository root. Streamlit Community Cloud reads the roo
 
 A restart can end in-memory investigations or workers. Download bundles to preserve evidence. This is a shared open-source workbench with bounded concurrency; if the owner wants tighter public API spending controls, set `allow_external_analysis=false` or `provider_mode="offline"` and enable connected work in a controlled deployment.
 
+### Confirming a deployed update
+
+GitHub `main` and a passing CI run do not establish the code loaded by an existing Cloud process. In **About this workbench** in the sidebar, the chart update identifies itself as **First Look 0.3.1** and **Chart renderer: 2026-11-23.1**. The renderer marker is read from the loaded compiler module; an older imported module reports that a reboot is required. A missing marker means the entrypoint itself predates this diagnostic.
+
+If the source button links to this repository's `main` but the app still shows older charts, preserve any work and use the owner workspace at `share.streamlit.io` → the app's overflow menu → **Reboot**. Alternatively use **Manage app → overflow menu → Reboot app**. A browser refresh or ordinary script rerun does not force a fresh server build. Follow the [official reboot instructions](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/reboot-your-app).
+
+After rebooting, check the two sidebar markers and start a fresh local Penguins investigation. Scatterplots should have square inner axes, rotated y-axis titles and declared units in their axis labels. Their safeguards include the square-scatter rule. If the markers are still absent, check the deployed repository, branch, entrypoint and Cloud build logs before changing chart dimensions.
+
+Count versus percentage is a separate analytical choice: single-population histograms/frequencies currently default to recorded row counts. Two-group frequency polygons use within-group proportions so unequal sample sizes do not dominate shape comparisons. Existing proportions are not raw counts labelled as percentages. Changing this default requires an explicit normalisation choice and recorded denominator, not merely appending a percent sign.
+
 ## Owner credentials
 
 Copy `.streamlit/secrets.toml.example` to **`.streamlit/secrets.toml`** for local use, or paste its contents into **Community Cloud → App settings → Secrets**. The example contains placeholders only; placeholders never enable a provider.

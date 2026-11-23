@@ -12,6 +12,8 @@ import pandas as pd
 from firstlook.contracts import ChartSpec, ResultArtifact, digest
 from firstlook.visualization.layout import chart_dimensions, square_geometry
 
+RENDERER_VERSION = "2026-11-23.1"
+
 PALETTE = ["#4169D8", "#209589", "#C67049", "#9774BD", "#A58A30", "#647B9C", "#CD7099", "#5598B0"]
 DARK_PALETTE = ["#86A9FF", "#63CFBD", "#E8A47D", "#B59ADD", "#D5BD67", "#9DB6DC", "#EA9DC3", "#84BDCE"]
 

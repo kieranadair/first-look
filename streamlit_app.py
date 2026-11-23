@@ -2,7 +2,9 @@
 
 import streamlit as st
 
+from firstlook import __version__
 from firstlook.ui.runtime import poll_job, settings, workspace
+from firstlook.visualization import compiler as chart_compiler
 
 st.set_page_config(
     page_title="First Look · discover, challenge, preserve",
@@ -115,7 +117,10 @@ with st.sidebar:
         st.caption(
             "Local work makes no provider calls. External analysis requires your explicit dataset permission."
         )
-        st.caption("First Look 0.3 · Apache-2.0")
+        st.caption(f"First Look {__version__} · Apache-2.0")
+        st.caption(
+            "Chart renderer: " + getattr(chart_compiler, "RENDERER_VERSION", "older module — reboot required")
+        )
 if ws.message:
     st.toast(ws.message)
     ws.message = ""
