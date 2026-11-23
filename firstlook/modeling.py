@@ -464,6 +464,10 @@ def diagnostic_findings(dataset: Dataset, inv: Investigation, run: ModelRun) -> 
             metrics=run.metrics[run.provider],
             metadata={"model_run": run.id, "proportion": template == "bar" and run.task == "classification"},
         )
+        if title == "Observed versus predicted":
+            result.metadata["reference"] = "identity"
+        elif title == "Where do held-out errors concentrate?":
+            result.metadata["reference"] = "zero"
         finding = Finding(
             id=plan.id,
             title=title,

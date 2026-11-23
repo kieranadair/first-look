@@ -215,6 +215,110 @@
         "test_calendar_phase_preserves_full_cycles_and_original_dates",
         "test_common_baseline_is_same_date_and_preserves_original_values"
       ]
+    },
+    "CHART-ZERO": {
+      "name": "Magnitude bars include zero, including facets",
+      "requirement": "Magnitude bars and facet bars include zero; a shared truncated domain is still invalid.",
+      "evidence": "Few (2020), Ch 5, pp 112-113; Ch 10, pp 235-238",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/chart-design-audit.md",
+      "tests": [
+        "test_every_facet_bar_has_zero_and_comparison_cannot_remove_it",
+        "test_chart_hard_constraints"
+      ]
+    },
+    "CHART-CORRELATION-DOMAIN": {
+      "name": "Correlation bounds do not apply to every dot plot",
+      "requirement": "Correlation summaries use [-1, 1]; generic dot plots retain the actual quantity domain.",
+      "evidence": "Few (2020), Ch 5, pp 112-113; Ch 10, pp 235-238; Few (2020), Ch 9, pp 203-216, 223-230",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/chart-design-audit.md",
+      "tests": [
+        "test_generic_dot_and_correlation_domains_are_different_contracts"
+      ]
+    },
+    "CHART-SCATTER-ASPECT": {
+      "name": "Square scatter area does not equate data units",
+      "requirement": "Use a square scatter plot area without implying that one x unit equals one y unit.",
+      "evidence": "Few (2020), Ch 9, pp 203-216, 223-230",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/chart-design-audit.md",
+      "tests": [
+        "test_square_plot_area_survives_native_width_capping",
+        "test_density_uses_numeric_bin_indices_and_square_area_after_record_reordering",
+        "test_review_assets_use_contract_domains_and_bound_values"
+      ]
+    },
+    "CHART-AREA-PARTS": {
+      "name": "Area marks need valid parts and a recorded whole",
+      "requirement": "Area sizes are finite and nonnegative with a positive whole; zero-area parts remain disclosed.",
+      "evidence": "Few (2020), Ch 5, pp 118-119; First Look executable semantic, chart and source-membership contracts",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/chart-design-audit.md",
+      "tests": [
+        "test_area_rejects_invalid_or_unproved_part_whole_quantities",
+        "test_rectangle_areas_match_exact_parts_without_overlap_or_inventing_zero_area",
+        "test_review_treemap_uses_original_amounts_and_preserves_zero_parts"
+      ]
+    },
+    "CHART-HISTOGRAM-INTERVALS": {
+      "name": "Histogram geometry preserves numeric intervals",
+      "requirement": "Histogram columns preserve equal contiguous numeric intervals, including empty bins; no fake gaps.",
+      "evidence": "Few (2020), Ch 6, pp 144-147, 162-164",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/chart-design-audit.md",
+      "tests": [
+        "test_histogram_bars_cover_recorded_intervals_and_keep_selection_membership",
+        "test_large_numeric_origin_does_not_hide_wrong_histogram_geometry",
+        "test_group_polygons_use_common_bins_and_normalize_unequal_exposure"
+      ]
+    },
+    "CHART-REFERENCE-QUANTITY": {
+      "name": "Reference lines name the compared quantity",
+      "requirement": "Differences reference zero; compatible Q-Q values reference identity y=x, not a fitted regression.",
+      "evidence": "Few (2020), Ch 6, pp 157-161",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/chart-design-audit.md",
+      "tests": [
+        "test_identity_reference_has_equal_units_and_no_fake_selectable_members",
+        "test_quantile_difference_uses_quantile_domain_and_zero_reference",
+        "test_saved_shift_and_identical_quantiles_keep_exact_source_values"
+      ]
+    },
+    "CHART-RESIDUAL-COLOR": {
+      "name": "Signed residual color has a neutral zero",
+      "requirement": "Signed residuals use a diverging scale centred at zero; counts use a sequential scale.",
+      "evidence": "Few (2020), Ch 7, pp 172-173",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/chart-design-audit.md",
+      "tests": [
+        "test_signed_heatmap_has_symmetric_zero_colour_domain_and_explicit_order",
+        "test_crosstab_denominators_are_independent_known_answers"
+      ]
+    },
+    "CHART-BOX-CONVENTION": {
+      "name": "Range and Tukey boxes are declared conventions",
+      "requirement": "Declare min/quartiles/median/max for a range box; Tukey whiskers and outliers require their own definition.",
+      "evidence": "Few (2020), Ch 6, pp 151-153; First Look executable semantic, chart and source-membership contracts",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/chart-design-audit.md",
+      "tests": [
+        "test_template_contracts"
+      ]
+    },
+    "CHART-TIME-GAPS": {
+      "name": "Timestamp spacing and unknown observations persist",
+      "requirement": "Preserve timestamp spacing and unknown gaps; filling needs the existing scoped semantic permission.",
+      "evidence": "Few (2020), Ch 8, pp 179-189, 196-200; First Look executable semantic, chart and source-membership contracts",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/chart-design-audit.md",
+      "tests": [
+        "test_missing_event_day_is_unknown_until_complete_recording_is_declared",
+        "test_temporal_native_and_review_share_recorded_time_domain",
+        "test_explicit_null_is_not_filled_and_interpolation_is_bounded"
+      ]
+    },
+    "CHART-SOURCE-MEMBERSHIP": {
+      "name": "Every selectable mark preserves source contributors",
+      "requirement": "Keep exact source contributors and sampling scope; display-only reference geometry creates no observations.",
+      "evidence": "First Look executable semantic, chart and source-membership contracts",
+      "source": "https://github.com/kieranadair/first-look/blob/main/docs/research/chart-design-audit.md",
+      "tests": [
+        "test_treemap_encodes_original_amounts_and_accounts_for_native_virtual_root",
+        "test_group_polygons_use_common_bins_and_normalize_unequal_exposure",
+        "test_identity_reference_has_equal_units_and_no_fake_selectable_members"
+      ]
     }
   },
   "scope": "The studies motivate conditional design patterns. Thresholds and budgets are engineering choices; this integrated app has not undergone a user study. Few's corpus is expert guidance, not one experimentally validated universal algorithm."

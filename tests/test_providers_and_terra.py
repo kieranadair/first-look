@@ -58,6 +58,14 @@ def test_official_jev_http_contract_and_record():
     assert result.usage["input_tokens"] == 20
     assert requests[0]["questions"]["next"]["type"] == "choice"
     assert result.criteria == {"a": "A valid view", "none": "Abstain"}
+    from firstlook.contracts import digest
+    from firstlook.visualization.guidance import GUIDANCE_VERSION
+
+    assert requests[0]["state"]["chart_policy"]["version"] == GUIDANCE_VERSION
+    assert requests[0]["state"]["chart_policy"]["enforced_by"] == "Python"
+    assert result.state == requests[0]["state"] and result.state_hash == digest(result.state)
+    assert result.instructions == requests[0]["questions"]["next"]["instructions"]
+    assert "one atomic judgment" in result.instructions and "not permissions" in result.instructions
 
 
 @pytest.mark.parametrize("p,accepted", [(0.5, False), (0.74, False), (0.9, True)])
@@ -159,6 +167,13 @@ def test_official_terra_responses_structured_text_and_image():
     assert body["text"]["format"]["type"] == "json_schema"
     assert [c["type"] for c in body["input"][0]["content"]] == ["input_text", "input_image"]
     assert p.records[0]["resolved_model"] == "gpt-6.1-terra-test"
+    from firstlook.visualization.guidance import GUIDANCE_VERSION
+
+    payload = json.loads(body["input"][0]["content"][0]["text"])
+    assert payload["chart_policy"]["version"] == GUIDANCE_VERSION
+    assert payload["chart_policy"]["enforced_by"] == "Python"
+    assert "not established facts" in body["instructions"]
+    assert p.records[0]["instructions"] == body["instructions"]
     for _ in range(2):
         p.propose(packet, [])
     with pytest.raises(ProviderError, match="budget"):
@@ -215,6 +230,8 @@ def test_review_assets_use_contract_domains_and_bound_values(investigation):
     assert asset.manifest["axis_domains"] == axis_domains(f.chart, result)
     assert asset.manifest["labels"] == {"x": f.chart.x_label, "y": f.chart.y_label}
     assert asset.manifest["context"] == result.plan.context
+    geometry = asset.manifest["plot_geometry"]
+    assert geometry["width"] == pytest.approx(geometry["height"], abs=0.01)
 
 
 def test_matched_visual_and_text_loop_preserves_checked_and_negative_evidence(dataset, investigation):

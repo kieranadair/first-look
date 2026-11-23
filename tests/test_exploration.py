@@ -134,6 +134,29 @@ def test_group_comparison_uses_full_cdf_and_quantile_values():
     assert reversed_result.metrics["quantiles"][2]["difference"] == 49.5
 
 
+def test_group_polygons_use_common_bins_and_normalize_unequal_exposure():
+    ds = data(
+        pd.DataFrame({"group": ["A"] * 40 + ["B"] * 80, "value": list(range(20)) * 2 + list(range(20)) * 4})
+    )
+    r, f = recipe(
+        ds, "group_shape", ["f000", "f001"], levels=["A", "B"], representation="frequency_polygon", bins=5
+    )
+    assert f.chart.template == "frequency_polygon"
+    parts = [[row for row in r.records if row["group"] == label] for label in ["A", "B"]]
+    assert [[row["value"] for row in p] for p in parts] == [[0.2] * 5] * 2
+    assert [row["count"] for row in parts[0]] == [8] * 5
+    assert [row["count"] for row in parts[1]] == [16] * 5
+    assert [(row["left"], row["right"]) for row in parts[0]] == [
+        (row["left"], row["right"]) for row in parts[1]
+    ]
+    assert sorted(i for row in r.records for i in row["row_ids"]) == list(range(120))
+    assert [q["difference"] for q in r.metrics["quantiles"]] == pytest.approx([0] * 5, abs=1e-12)
+    compiled = compile_chart(f.chart, r)
+    assert len(compiled.options["series"]) == 2
+    asset = render_asset(r, f.chart)
+    assert len(asset.records) == 10 and not asset.manifest["sampled"]
+
+
 @pytest.mark.parametrize("mode", ["count", "whole", "within_x", "within_y", "residual"])
 def test_crosstab_denominators_are_independent_known_answers(mode):
     pairs = [("A", "C")] * 10 + [("A", "D")] * 30 + [("B", "C")] * 20 + [("B", "D")] * 40 + [(None, "D")]
@@ -157,7 +180,11 @@ def test_density_counts_every_pair_and_preserves_complete_cells():
     assert len(r.records) == 16 and sum(c["value"] for c in r.records) == 50
     assert sorted(i for c in r.records for i in c["row_ids"]) == list(range(50))
     assert len(compile_chart(f.chart, r).options["dataset"][0]["source"]) == 16
-    assert len(render_asset(r, f.chart).records) == 16
+    asset = render_asset(r, f.chart)
+    assert len(asset.records) == 16
+    assert asset.manifest["plot_geometry"]["width"] == pytest.approx(
+        asset.manifest["plot_geometry"]["height"], abs=0.01
+    )
     with pytest.raises(ValueError, match="complete"):
         render_asset(r, f.chart, max_points=8)
 
@@ -186,6 +213,9 @@ def test_concentration_is_over_original_nonnegative_parts():
     r, _ = recipe(ds, "concentration", ["f000", "f001"], metric=mid, groups=["f000"])
     assert [v["value"] for v in r.records] == [0.6, 0.9, 1]
     assert r.metrics["original_parts"] == 3
+    from firstlook.visualization.composition import amount_records
+
+    assert [row["value"] for row in amount_records(r)] == [60, 30, 10]
     ds.frame.loc[0, "f001"] = -60
     with pytest.raises(ValueError, match="nonnegative"):
         recipe(ds, "concentration", ["f000", "f001"], metric=mid, groups=["f000"])

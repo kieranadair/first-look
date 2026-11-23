@@ -31,7 +31,7 @@ def main():
         page.keyboard.press("Escape")
         page.get_by_role("button", name="Preview cohort", exact=True).click()
         page.get_by_role("button", name="Compare populations", exact=True).click(timeout=15000)
-        expect(page.locator('[data-testid="stEChartsChart"]')).to_have_count(2, timeout=30000)
+        expect(page.locator('[data-testid="stEChartsChart"]')).to_have_count(3, timeout=30000)
         page.get_by_role("heading", name="Compare", exact=True).scroll_into_view_if_needed()
         charts = page.locator('[data-testid="stEChartsChart"]')
         boxes = [chart.bounding_box() for chart in charts.all()]
@@ -52,7 +52,7 @@ def main():
         page.get_by_role("link", name="Evidence", exact=True).click()
         page.get_by_role("button", name="Comparisons", exact=True).click()
         expect(page.get_by_role("combobox", name="Comparison board", exact=True)).to_be_visible()
-        expect(page.locator('[data-testid="stEChartsChart"]')).to_have_count(2)
+        expect(page.locator('[data-testid="stEChartsChart"]')).to_have_count(3)
         page.get_by_role("button", name="Prepare downloads", exact=True).click()
         with page.expect_download() as pending:
             page.get_by_role("button", name="Download investigation", exact=True).click()
@@ -67,7 +67,7 @@ def main():
             page.set_viewport_size({"width": width, "height": 1000})
             page.get_by_role("heading", name="Compare", exact=True).scroll_into_view_if_needed()
             actual = [c.bounding_box() for c in page.locator('[data-testid="stEChartsChart"]').all()]
-            assert len(actual) == 2
+            assert len(actual) == 3
             assert all(b and b["x"] >= -1 and b["x"] + b["width"] <= width + 1 for b in actual), (
                 width,
                 actual,

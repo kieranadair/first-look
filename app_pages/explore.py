@@ -7,7 +7,7 @@ from firstlook.exploration import perspective_coverage
 from firstlook.semantic.model import get_model
 from firstlook.semantic.planner import metric_fields
 from firstlook.semantics import dimensions, measures
-from firstlook.ui.components import page_header, render_chart, scope_caption, workflow_note
+from firstlook.ui.components import chart_view, page_header, render_chart, scope_caption, workflow_note
 from firstlook.ui.runtime import start_analysis, start_recipe, start_view, workspace
 
 ws = workspace()
@@ -178,7 +178,20 @@ if not choices or getattr(controls, "open", False):
                         max_selections=2,
                         key="shape_levels_" + category,
                     )
-                    recipe, fields, params = "group_shape", [category, value], {"levels": group_levels}
+                    representation = st.selectbox(
+                        "Shape display",
+                        ["ecdf", "frequency_polygon"],
+                        format_func=lambda v: (
+                            "Cumulative distributions" if v == "ecdf" else "Common-bin frequency polygons"
+                        ),
+                        key="group_shape_display",
+                    )
+                    recipe, fields = "group_shape", [category, value]
+                    params: dict = {"levels": group_levels, "representation": representation}
+                    if representation == "frequency_polygon":
+                        params["bins"] = st.slider(
+                            "Common equal-width bins", 5, 50, 15, key="group_polygon_bins"
+                        )
                 elif mode == "Histogram sensitivity":
                     normalization = st.selectbox(
                         "Histogram quantity",
@@ -361,7 +374,8 @@ finding = next(f for f in choices if f.id == selected)
 related = inv.related_views.get(finding.result_id, {})
 companion = next((f for f in inv.findings if f.result_id == related.get("companion")), None)
 display = [companion, finding] if companion else [finding]
-grid = st.grid(len(display), min_column_width=330, gap="small")
+quantiles = inv.results[finding.result_id].metrics.get("quantiles")
+grid = st.grid(len(display) + bool(quantiles), min_column_width=330, gap="small")
 for f in display:
     with grid.cell():
         with st.container(border=True, height="stretch"):
@@ -369,6 +383,21 @@ for f in display:
             render_chart(f, inv, suffix="perspective_" + f.id, selection=not ws.replay, height=310)
             st.caption(scope_caption(inv.results[f.result_id]))
             st.caption(f.observation)
+if quantiles:
+    from firstlook.visualization.quantiles import quantile_deviation
+
+    original = inv.results[finding.result_id]
+    levels = list(dict.fromkeys(str(r.get("group", "")) for r in original.records))
+    contrast, chart = quantile_deviation(original, quantiles, levels[0], levels[1])
+    with grid.cell():
+        with st.container(border=True, height="stretch"):
+            st.markdown("**Differences at matched percentiles**")
+            chart_view(chart, contrast, "group_quantiles_" + finding.id, height=310)
+            st.caption(
+                f"{levels[0]} minus {levels[1]}; the horizontal zero means equal quantiles. Markers show the saved percentiles only, using full-source values."
+            )
+            with st.expander("Exact matched quantiles"):
+                st.dataframe(quantiles, hide_index=True, alt="Full-source quantiles for the two named groups")
 if not ws.replay:
     with st.container(horizontal=True):
         if st.button("Inspect definition and exact values", key="perspective_inspect"):

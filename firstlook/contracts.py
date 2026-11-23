@@ -125,13 +125,26 @@ class ChartSpec(Contract):
     result_id: str
     context: str
     template: Literal[
-        "bar", "dot", "histogram", "ecdf", "scatter", "box", "line", "heatmap", "density", "facet"
+        "bar",
+        "dot",
+        "histogram",
+        "frequency_polygon",
+        "ecdf",
+        "scatter",
+        "box",
+        "line",
+        "heatmap",
+        "density",
+        "facet",
+        "quantile_difference",
+        "treemap",
     ]
     x_label: str
     y_label: str
     units: str = ""
     scale: Literal["linear", "log"] = "linear"
     zero_baseline: bool = False
+    value_field: Literal["value", "amount"] = "value"
     rules: list[str] = Field(default_factory=list)
     alt: str
 

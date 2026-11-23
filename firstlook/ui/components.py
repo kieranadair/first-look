@@ -11,6 +11,7 @@ from firstlook.methods import rule_details
 from firstlook.state import pin
 from firstlook.ui.runtime import workspace
 from firstlook.visualization.compiler import compile_chart, selected_rows
+from firstlook.visualization.layout import chart_dimensions
 
 STATUS = {
     "changed": ("Changed under this check", "orange"),
@@ -68,20 +69,107 @@ def render_chart(
     from firstlook.exploration import display_result
 
     result = display_result(inv, finding.result_id)
+    if selection and not workspace().replay:
+        representation_controls(finding, result, suffix or finding.id, height)
     return chart_view(finding.chart, result, suffix or finding.id, selection, height)
 
 
+def representation_controls(finding, result, key, height):
+    """Choose a finite representation; pins retain the selected chart contract."""
+    original = finding.chart
+    changes = {}
+    if original.template in {"histogram", "frequency_polygon"} and not any(
+        "group" in row for row in result.records
+    ):
+        choice = (
+            st.segmented_control(
+                "Distribution display",
+                ["Histogram", "Frequency polygon"],
+                default="Frequency polygon" if original.template == "frequency_polygon" else "Histogram",
+                key="representation_" + key,
+            )
+            or "Histogram"
+        )
+        changes = {"template": "frequency_polygon" if choice == "Frequency polygon" else "histogram"}
+        if choice == "Frequency polygon":
+            st.caption(
+                "Same equal-width bins and quantity. Straight segments connect bin midpoints; this is not a smoothed density estimate."
+            )
+    elif result.metadata.get("partwhole_verified") and result.metadata.get("full_original_parts"):
+        from firstlook.visualization.composition import amount_records, labelled_part_capacity
+
+        parts = amount_records(result)
+        capacity = labelled_part_capacity(height)
+        labels = ["Cumulative share", "Ranked parts", "Treemap overview"]
+        default = "Treemap overview" if len(parts) > capacity else "Ranked parts"
+        if original.template == "treemap":
+            default = "Treemap overview"
+        elif original.template == "bar":
+            default = "Ranked parts"
+        choice = (
+            st.segmented_control("Contribution display", labels, default=default, key="representation_" + key)
+            or default
+        )
+        template = {"Cumulative share": "line", "Ranked parts": "bar", "Treemap overview": "treemap"}[choice]
+        changes = {
+            "template": template,
+            "value_field": "value" if template == "line" else "amount",
+            "zero_baseline": template == "bar",
+            "x_label": "Original categories, ranked by contribution"
+            if template == "line"
+            else "Contribution amount",
+            "y_label": "Cumulative share" if template == "line" else "Original category",
+            "alt": (
+                "Cumulative share across original categories ranked by contribution."
+                if template == "line"
+                else "Original nonnegative additive contribution amounts by category, encoded by "
+                + (
+                    "rectangle area; no spatial or colour-valued measure is implied."
+                    if template == "treemap"
+                    else "bar length from zero."
+                )
+            ),
+        }
+        st.caption(
+            f"{len(parts)} original parts · labelled-row budget {capacity} for this panel. This is a display-fit choice, not a universal treemap threshold."
+        )
+    if changes and any(getattr(original, k) != v for k, v in changes.items()):
+        from firstlook.contracts import digest
+
+        finding.chart = original.model_copy(
+            update={**changes, "id": digest([result.id, changes, "chart-policy-1"])}
+        )
+
+
 def chart_view(spec, result, key: str, selection: bool = False, height: int = 310):
-    compiled = compile_chart(spec, result, st.context.theme.type == "dark")
+    width, height = chart_dimensions(spec, result, height)
+    compiled = compile_chart(spec, result, st.context.theme.type == "dark", width=width, height=height)
     selectable = selection and any(compiled.row_map.values())
     event = st.echarts_chart(
         compiled.options,
         key=f"chart_{key}_{compiled.mapping_hash}",
         height=height,
+        width=width,
         on_select=cast(Any, "rerun" if selectable else "ignore"),
         alt=spec.alt,
         renderer="canvas" if len(result.records) > 1500 else "svg",
     )
+    if spec.template == "box":
+        st.caption(
+            result.metadata.get(
+                "whisker_convention",
+                "Whiskers show observed minimum and maximum; boxes show the middle half. These are range boxes, not 1.5-IQR fences.",
+            )
+        )
+    elif spec.template == "treemap":
+        zero = sum(r.get("amount") == 0 for r in result.records)
+        st.caption(
+            f"Area encodes contribution amount. Position and colour do not encode another variable. {zero} zero-area parts remain in the exact values; small labels may be hidden. Use ranked parts or the table for precise comparisons."
+        )
+    if result.metadata.get("time_axis") and any(r.get("complete") is False for r in result.records):
+        st.caption(
+            "Some periods have incomplete or unconfirmed recording coverage. Recorded totals are not necessarily complete-period totals; missing intervals remain unknown."
+        )
     ws = workspace()
     if selectable and event is not None and ws.dataset and not ws.replay:
         chosen = selected_rows(event, compiled, set(ws.context().row_ids))
@@ -199,7 +287,9 @@ def evidence_inspector(finding: Finding, inv: Investigation, compact: bool = Fal
     for limitation in dict.fromkeys([*finding.limitations, *result.warnings]):
         st.caption(limitation)
     with st.expander("Chart safeguards and research"):
-        for rule in rule_details(finding.chart.rules):
+        from firstlook.visualization.guidance import chart_rule_ids
+
+        for rule in rule_details(chart_rule_ids(finding.chart, result)):
             st.caption(rule["requirement"])
             st.markdown(f"[{rule['name']}]({rule['source']}) · {rule['evidence']}")
         st.caption(
@@ -283,18 +373,23 @@ def comparison_board(bundle, key="comparison"):
                 st.caption(
                     "Selected minus reference at matched quantiles. Full source values and the linear quantile estimator; no significance claim."
                 )
-                st.dataframe(
-                    bundle.summary,
-                    hide_index=True,
-                    height=218,
-                    column_config={
-                        "quantile": st.column_config.NumberColumn("q", format="%.2f"),
-                        "selected": st.column_config.NumberColumn("Selected", format="%.3g"),
-                        "reference": st.column_config.NumberColumn("Reference", format="%.3g"),
-                        "difference": st.column_config.NumberColumn("Difference", format="%.3g"),
-                    },
-                    alt="Source quantile differences beside both cumulative curves",
+                from firstlook.visualization.quantiles import quantile_deviation
+
+                contrast, contrast_chart = quantile_deviation(bundle.views[0].result, bundle.summary)
+                contrast.metadata.update(
+                    source_contexts=[v.context.id for v in bundle.views],
+                    source_results=[v.result.id for v in bundle.views],
                 )
+                chart_view(contrast_chart, contrast, f"{key}_quantiles_{bundle.id}", height=280)
+                st.caption(
+                    "Above zero: selected quantile higher. Below zero: reference quantile higher. Only the saved percentiles are shown, in the source measure's units."
+                )
+                with st.expander("Exact matched quantiles"):
+                    st.dataframe(
+                        bundle.summary,
+                        hide_index=True,
+                        alt="Exact full-source matched quantiles and differences",
+                    )
     elif bundle.summary:
         st.dataframe(
             bundle.summary,

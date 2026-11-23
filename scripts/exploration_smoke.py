@@ -69,13 +69,13 @@ def main():
     assert builder["value"] is False
     interact(widget_state={"compare_measure": "sales"})
     click("compute_comparison")
-    wait_for(lambda: sum(n["type"] == "echarts_chart" for n in walk(state["tree"])) == 2)
+    wait_for(lambda: sum(n["type"] == "echarts_chart" for n in walk(state["tree"])) == 3)
     assert "Reference" in text() and "quantile" in text()
     click("save_comparison")
     interact(page="evidence")
     interact(widget_state={"evidence_view": "Comparisons"})
     assert any(a["key"] == "evidence_comparison" for a in state["actions"])
-    assert sum(n["type"] == "echarts_chart" for n in walk(state["tree"])) == 2
+    assert sum(n["type"] == "echarts_chart" for n in walk(state["tree"])) == 3
     click("prepare_export")
     assert len([n for n in walk(state["tree"]) if n["type"] == "download_button"]) == 2
     interact(page="compare")

@@ -24,7 +24,7 @@ Open the URL printed by Streamlit. No keys, account or external request is neede
 
 1. **Understand** — open CSV or Parquet; inspect profiles; correct roles, order and units; set a focus and sampling assumption.
 2. **Meaning** — review focused decisions about quantities, row/entity grain, hierarchies, membership, denominator populations, observation schedules and predictor availability. Define totals, distinct counts, entity averages, weighted means, ratios, snapshots and counter increments. Validate and exchange a contract for the exact table.
-3. **Explore** — see which perspectives were screened, computed or left unexamined. Open distributions, conditional center and spread, categorical intersections, concentration, influence, density counts or temporal context. Related views sit together with their scope and support.
+3. **Explore** — see which perspectives were screened, computed or left unexamined. Open distributions, conditional center and spread, categorical intersections, concentration, influence, density counts or temporal context. Compare shapes using common-bin frequency polygons; switch validated contributions between ranked bars, cumulative shares and a treemap overview. Related views sit together with their scope and support.
 4. **Findings** — browse the shortlist, ask a supported question, inspect definitions and select chart marks. Preview a cohort while retaining the reference, or explicitly begin a filtered investigation.
 5. **Compare** — choose exact rows or whole entities inside an anchored reference. Compare with the remainder or whole population using fixed category identities, compatible axes and explicit denominators. Distribution curves and source quantile differences appear together on desktop. Save the board, query exact thresholds, or return to the original investigation after filtering.
 6. **Models** — evaluate a declared predictive task. Inspect related held-out diagnostics side by side; cohort boards reuse recorded predictions without refitting.
@@ -43,6 +43,7 @@ Connected mode runs one visible suggested model protocol, Jev’s constrained vi
 - [Development and validation](docs/development/README.md) — tests, evaluation tools and recorded measurements.
 - [Interface refinement and design rationale](docs/development/ui-uplift.md).
 - [Exploration uplift: implementation and validation](docs/development/exploration-uplift.md) and [Few Part II research synthesis](docs/research/few-part-ii-review.md).
+- [Chart design audit](docs/research/chart-design-audit.md) — all thirteen templates, sources, Python-enforced rules and separate Jev/Terra guidance.
 - [Executable semantic contract: research, patterns and limits](docs/research/semantic-contract.md).
 - [Research evidence](docs/research/evidence.md) and [Terra integration](docs/research/terra-integration.md).
 - [Analytical conventions](docs/ANALYTICAL_CONVENTIONS.md) and [replaying evidence](docs/REPLAY.md).

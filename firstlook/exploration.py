@@ -79,7 +79,7 @@ def validate_task(ds, ctx, plan):
     if recipe not in RECIPES or len(plan.fields) != len(set(plan.fields)):
         raise ValueError("Choose a recorded exploration recipe with distinct fields.")
     parameters = {
-        "group_shape": {"levels"},
+        "group_shape": {"levels", "representation", "bins"},
         "density": {"bins"},
         "influence": set(),
         "concentration": {"metric", "groups"},
@@ -198,7 +198,45 @@ def execute(ds, ctx, plan):
         metrics["omitted_other_group_rows"] = len(valid) - n
         template, x_label, y_label = "ecdf", ds.label(value), "Within-group cumulative proportion"
         meta.update(step="post", selection_semantics="Exact-value source members of retained vertices")
+        representation = str(params.get("representation", "ecdf"))
+        if representation not in {"ecdf", "frequency_polygon"}:
+            raise ValueError("Choose cumulative distributions or common-bin frequency polygons.")
+        if representation == "frequency_polygon":
+            bins = int(params.get("bins", 15))
+            if not 5 <= bins <= 50:
+                raise ValueError("Choose between five and fifty common equal-width bins.")
+            pooled = np.concatenate(arrays)
+            _, edges = np.histogram(pooled, bins=bins)
+            records = []
+            for level in levels:
+                source = valid.loc[valid[category].astype(str).eq(str(level)), value].astype(float)
+                counts, _ = np.histogram(source, bins=edges)
+                for i, count in enumerate(counts):
+                    members = source.index[
+                        (source >= edges[i])
+                        & ((source <= edges[i + 1]) if i == bins - 1 else (source < edges[i + 1]))
+                    ].tolist()
+                    records.append(
+                        {
+                            "group": str(level),
+                            "x": float((edges[i] + edges[i + 1]) / 2),
+                            "left": float(edges[i]),
+                            "right": float(edges[i + 1]),
+                            "value": float(count / len(source)),
+                            "count": int(count),
+                            "label": f"{edges[i]:.3g}–{edges[i + 1]:.3g}",
+                            "row_ids": members,
+                        }
+                    )
+            template, y_label = "frequency_polygon", "Within-group proportion per bin"
+            meta.update(
+                normalization="proportion",
+                common_bin_edges=edges.tolist(),
+                selection_semantics="All recorded source members in the selected bins",
+            )
         observation = "Compare shape, center and tails using within-group cumulative proportions. CDF distance and quantile differences use full source values; these are descriptive effects."
+        if representation == "frequency_polygon":
+            observation = "Compare two shapes with common equal-width bins and within-group proportions. Straight segments connect bin midpoints; these are not smoothed densities. Group sizes, full-source quantile differences and CDF distance remain recorded."
         warnings.append(
             "Independent-sample inference is not assumed. Different distributions do not establish a treatment effect or distinct latent populations."
         )
@@ -346,6 +384,7 @@ def execute(ds, ctx, plan):
                 "Cumulative share",
             )
             metrics = {"total": total, "original_parts": len(records)}
+            meta.update(partwhole_verified=True, full_original_parts=True)
             observation = "Cumulative contribution over original eligible parts. This describes the observed concentration; no 80/20 or power-law model is assumed."
         else:
             if metric.transform in {"zscore", "index", "percent_change"}:

@@ -8,6 +8,7 @@ from dataclasses import asdict, is_dataclass
 from firstlook.config import Settings
 from firstlook.contracts import DecisionRecord, clean, digest
 from firstlook.providers.base import ProviderError, safe_error
+from firstlook.visualization.guidance import guidance_for, policy_packet
 
 
 class JevProvider:
@@ -20,6 +21,8 @@ class JevProvider:
             raise ProviderError("Jev is not configured. Deterministic ranking remains available.")
         if self.calls >= 4 or not 1 <= len(options) <= 40:
             raise ProviderError("The decision budget or option limit was reached.")
+        state = {**state, "chart_policy": policy_packet()}
+        instructions = instructions + "\n\n" + guidance_for("jev")
         from typesafe_sdk import Choice, TypeSafeClient, RetryPolicy
 
         self.calls += 1

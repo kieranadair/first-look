@@ -37,11 +37,20 @@ python -m scripts.exploration_browser_smoke
 
 The browser test verifies actual chart-mark selection, filtering/reset, downloads, responsive cards and light/dark tokens. It captures **no screenshots, video or traces**. Stop the development server after checking.
 
+For an isolated check of all thirteen native chart templates, with no analyst session or agent API:
+
+```bash
+python -m scripts.chart_render_smoke
+```
+
+This command starts and stops its own localhost fixture (default port 8766), measures actual SVG plot geometry and histogram intervals at desktop/narrow widths, and verifies treemap source selection. It uses synthetic data and makes no provider calls. Generated fixtures, logs and the JSON report stay under ignored `reports/`. Install Playwright Chromium first; pass `--port` to use another free local port.
+
 ## Reference material
 
 - [Current implementation context](CONTEXT.md)
 - [Interface refinement and design rationale](ui-uplift.md), including the authorized screenshot review of bundled examples
 - [Comparison/exploration uplift](exploration-uplift.md) and [build design](exploration-uplift-plan.md)
+- [Chart design audit and provider policy](../research/chart-design-audit.md), with the deterministic/preference boundary and primary sources
 - [Semantic uplift build report](semantic-uplift.md) and [research-to-implementation mapping](../research/semantic-contract.md)
 - [Original design specification](specification.md), preserved as design history, not a second setup guide
 - [Historical build report](build-report.md)

@@ -108,7 +108,7 @@ def test_comparison_has_adjacent_visible_evidence_and_return_action():
     app = AppTest.from_file(Path(__file__).resolve().parents[1] / "streamlit_app.py", default_timeout=30)
     app.session_state["workspace"] = ws
     app.run().switch_page("app_pages/compare.py").run()
-    assert not app.exception and len(app.get("echarts_chart")) == 2
+    assert not app.exception and len(app.get("echarts_chart")) == 3
     assert any("Differences across" in m.value for m in app.markdown)
     assert not any("chart" in e.label.lower() for e in app.expander)
     app.button(key="filter_cohort").click().run()

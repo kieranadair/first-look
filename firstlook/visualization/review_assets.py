@@ -20,6 +20,11 @@ from firstlook.visualization.compiler import (
     validate_chart,
     plotting_records,
     category_label,
+    encoded_records,
+    series_colors,
+    categorical_order,
+    color_domain,
+    heatmap_colors,
 )
 
 _LOCK = threading.Lock()
@@ -41,8 +46,10 @@ def render_asset(result: ResultArtifact, spec: ChartSpec, max_points: int = 600)
     from matplotlib.backends.backend_agg import FigureCanvasAgg
     from matplotlib.figure import Figure
     from matplotlib.dates import date2num
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib.patches import Rectangle
 
-    data = result.frame()
+    data = pd.DataFrame(encoded_records(spec, result))
     reduction = {}
     curves = data.group.nunique() if spec.template == "ecdf" and "group" in data else 1
     budget = max_points - 2 * curves if spec.template == "ecdf" else max_points
@@ -86,17 +93,29 @@ def render_asset(result: ResultArtifact, spec: ChartSpec, max_points: int = 600)
         data = pd.DataFrame(plotting_records(spec, result, data.to_dict("records")))
     table = data.drop(columns=["row_ids", "row_id"], errors="ignore")
     with _LOCK:
-        fig = Figure(figsize=(8, 4.6), dpi=140, layout="constrained")
+        fig = Figure(
+            figsize=(6, 6) if spec.template in {"scatter", "density"} else (8, 4.6),
+            dpi=140,
+            layout="constrained",
+        )
         canvas = FigureCanvasAgg(fig)
         facets = list(dict.fromkeys(data.facet)) if spec.template == "facet" else []
-        axes = fig.subplots(1, len(facets), squeeze=False)[0] if facets else [fig.subplots()]
+        if facets:
+            columns = min(2, len(facets))
+            array = fig.subplots(int(np.ceil(len(facets) / columns)), columns, squeeze=False).ravel()
+            axes = list(array[: len(facets)])
+            for unused in array[len(facets) :]:
+                unused.set_visible(False)
+        else:
+            axes = [fig.subplots()]
         ax = axes[0]
         base_color = result.metadata.get("comparison_color", PALETTE[0])
+        colors = series_colors(result)
         ax.set_facecolor("#F6F8FC")
         if spec.template == "scatter":
             if "group" in data:
                 for i, (label, group) in enumerate(data.groupby("group", sort=False)):
-                    ax.scatter(group.x, group.y, s=11, alpha=0.65, label=str(label), color=PALETTE[i % 8])
+                    ax.scatter(group.x, group.y, s=11, alpha=0.65, label=str(label), color=colors[str(label)])
                 ax.legend()
             else:
                 ax.scatter(data.x, data.y, s=11, alpha=0.65, color=PALETTE[0])
@@ -104,7 +123,7 @@ def render_asset(result: ResultArtifact, spec: ChartSpec, max_points: int = 600)
             grouped = list(data.groupby("group", sort=False)) if "group" in data else [("", data)]
             for i, (label, part) in enumerate(grouped):
                 x = pd.to_datetime(part.x) if result.metadata.get("time_axis") else part.x
-                color = PALETTE[i % 8] if len(grouped) > 1 else base_color
+                color = colors[str(label)] if str(label) else base_color
                 if spec.template == "ecdf":
                     ax.step(x, part.value, where="post", color=color, label=str(label))
                 else:
@@ -122,9 +141,57 @@ def render_asset(result: ResultArtifact, spec: ChartSpec, max_points: int = 600)
                         ax.plot(x, part.q3, color=PALETTE[1], linestyle="--", label="75th percentile")
             if len(grouped) > 1 or result.metadata.get("conditional_spread"):
                 ax.legend(fontsize=7)
-        elif spec.template == "histogram":
-            widths = data.right - data.left if "right" in data else None
-            ax.bar(data.x, data.value, width=widths if widths is not None else 0.04, color=PALETTE[0])
+        elif spec.template in {"histogram", "frequency_polygon"}:
+            if spec.template == "histogram":
+                widths = data.right - data.left if "right" in data else None
+                ax.bar(data.x, data.value, width=widths if widths is not None else 0.04, color=base_color)
+            else:
+                grouped = list(data.groupby("group", sort=False)) if "group" in data else [("", data)]
+                for label, part in grouped:
+                    ax.plot(
+                        part.x,
+                        part.value,
+                        marker="o",
+                        markersize=3,
+                        color=colors[str(label)] if str(label) else base_color,
+                        label=str(label),
+                    )
+                if len(grouped) > 1:
+                    ax.legend(fontsize=7)
+            if all(isinstance(result.metrics.get(key), (int, float)) for key in ("q1", "q3")):
+                ax.axvspan(result.metrics["q1"], result.metrics["q3"], color=base_color, alpha=0.07)
+            if isinstance(result.metrics.get("median"), (int, float)):
+                ax.axvline(
+                    result.metrics["median"], color="#58677F", linestyle="--", linewidth=1, label="Median"
+                )
+                ax.legend(fontsize=7)
+        elif spec.template == "quantile_difference":
+            ax.scatter(data.x, data.value, color=base_color, s=24)
+        elif spec.template == "treemap":
+            from firstlook.visualization.composition import treemap_rectangles
+
+            rectangles = treemap_rectangles(data.value.tolist())
+            for row, (x, y, width, height) in zip(data.to_dict("records"), rectangles):
+                if width <= 0 or height <= 0:
+                    continue
+                ax.add_patch(
+                    Rectangle((x, y), width, height, facecolor=base_color, edgecolor="white", linewidth=1)
+                )
+                if width >= 0.13 and height >= 0.09:
+                    text = str(row["label"])
+                    ax.text(
+                        x + width / 2,
+                        y + height / 2,
+                        text[:24] + ("…" if len(text) > 24 else ""),
+                        ha="center",
+                        va="center",
+                        fontsize=7,
+                        color="white",
+                        clip_on=True,
+                    )
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.set_axis_off()
         elif spec.template in {"bar", "dot"}:
             if spec.template == "bar":
                 ax.barh(range(len(data)), data.value, color=base_color)
@@ -149,28 +216,36 @@ def render_asset(result: ResultArtifact, spec: ChartSpec, max_points: int = 600)
                 showfliers=False,
             )
         elif spec.template == "heatmap":
-            matrix = data.pivot(index="y", columns="x", values="value")
-            ax.imshow(
-                matrix.values,
-                cmap="Blues",
-                aspect="auto",
-                vmin=min(0, data.value.min()),
-                vmax=data.value.max(),
+            data["x"], data["y"] = data.x.astype(str), data.y.astype(str)
+            matrix = data.pivot(index="y", columns="x", values="value").reindex(
+                index=categorical_order(result, "y"), columns=categorical_order(result, "x")
             )
+            lo, hi = color_domain(result)
+            image = ax.imshow(
+                matrix.values,
+                cmap=LinearSegmentedColormap.from_list("evidence", heatmap_colors(result)),
+                aspect="auto",
+                origin="upper",
+                vmin=lo,
+                vmax=hi,
+            )
+            fig.colorbar(image, ax=ax, orientation="horizontal", fraction=0.06, pad=0.15)
             ax.set_xticks(range(len(matrix.columns)), matrix.columns.astype(str))
             ax.set_yticks(range(len(matrix.index)), matrix.index.astype(str))
         elif spec.template == "density":
             matrix = data.pivot(index="y", columns="x", values="value").sort_index().sort_index(axis=1)
             xe, ye = result.metadata["numeric_grid"]["x_edges"], result.metadata["numeric_grid"]["y_edges"]
-            ax.imshow(
+            lo, hi = color_domain(result)
+            image = ax.imshow(
                 matrix.values,
                 origin="lower",
                 extent=(xe[0], xe[-1], ye[0], ye[-1]),
                 aspect="auto",
-                cmap="Blues",
-                vmin=0,
-                vmax=data.value.max(),
+                cmap=LinearSegmentedColormap.from_list("evidence", heatmap_colors(result)),
+                vmin=lo,
+                vmax=hi,
             )
+            fig.colorbar(image, ax=ax, orientation="horizontal", fraction=0.06, pad=0.15)
         elif spec.template == "facet":
             for axis, facet in zip(axes, facets):
                 part = data[data.facet == facet]
@@ -192,14 +267,30 @@ def render_asset(result: ResultArtifact, spec: ChartSpec, max_points: int = 600)
                     (ax.set_xlim if axis == "x" else ax.set_ylim)(domain)
         if spec.scale == "log":
             ax.set_yscale("log")
+        if spec.template in {"scatter", "density"}:
+            ax.set_box_aspect(1)
+        if result.metadata.get("reference") == "identity":
+            domain = axis_domains(spec, result)["x"]
+            ax.plot(
+                domain,
+                domain,
+                linestyle="--",
+                linewidth=1,
+                color="#58677F",
+                label="Equal observed and predicted",
+            )
+        elif result.metadata.get("reference") == "zero" or spec.template == "quantile_difference":
+            ax.axhline(0, linestyle="--", linewidth=1, color="#58677F")
         if spec.template != "facet":
             ax.set_title(result.plan.question, fontsize=11)
         ax.set_xlabel(spec.x_label)
         ax.set_ylabel(spec.y_label)
-        ax.grid(alpha=0.15)
+        ax.grid(alpha=0.15 if spec.template != "treemap" else 0)
         out = io.BytesIO()
         canvas.print_png(out)
         png = out.getvalue()
+        bounds = ax.get_window_extent()
+        plot_geometry = {"width": bounds.width, "height": bounds.height}
         fig.clear()
     if len(png) > 1_500_000:
         raise ValueError("Review asset exceeds the image budget.")
@@ -220,6 +311,12 @@ def render_asset(result: ResultArtifact, spec: ChartSpec, max_points: int = 600)
             "reduction": reduction,
             "analysis_scope": result.metadata.get("analysis_scope", {}),
             "cdf_endpoint_extensions": spec.template == "ecdf",
+            "plot_geometry": plot_geometry,
+            "value_field": spec.value_field,
+            "reference": result.metadata.get("reference"),
+            "whisker_convention": result.metadata.get("whisker_convention")
+            if spec.template == "box"
+            else None,
         },
         png,
         table.to_dict("records"),

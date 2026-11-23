@@ -172,7 +172,10 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
         raise ValueError("Choose a nonempty valid subset of rows.")
     frame = dataset.frame.loc[ctx.row_ids]
     fields, op = plan.fields, plan.operation
-    labels = [dataset.label(f) for f in fields]
+    labels = [
+        dataset.label(f) + (" (" + dataset.field(f).unit + ")" if dataset.field(f).unit else "")
+        for f in fields
+    ]
     records: list[dict] = []
     metrics: dict = {}
     warnings: list[str] = []
@@ -180,6 +183,13 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
     meta: dict = {"method_version": "2" if modern else "1", "sampled": False}
     if dataset.record.semantic_model:
         meta["semantic_revision"] = dataset.record.semantic_model.revision
+    units = [
+        dataset.field(f).unit
+        for f in fields
+        if dataset.field(f).role == Role.MEASURE and dataset.field(f).unit
+    ]
+    if len(units) == 1:
+        meta["units"] = units[0]
     n, missing = len(frame), 0
     template, x_label, y_label = "bar", "", "Count"
     observation = ""
@@ -474,6 +484,7 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
             "omitted_rows": omitted,
         }
         template, x_label, y_label = "box", labels[0], labels[1]
+        meta["whisker_convention"] = "Observed minimum and maximum; boxes show quartiles, not 1.5-IQR fences"
         observation = f"Recorded group medians range from {number(min(r['value'] for r in records))} to {number(max(r['value'] for r in records))}; inspect the spread and group sizes."
         score = 0.45 + min(float(eta), 0.5)
     elif op == "category_relationship":
@@ -481,6 +492,11 @@ def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple
         if len(valid) < (1 if modern else 30) or any(valid[f].nunique() > 8 for f in fields):
             raise ValueError("Use two dimensions with at most eight levels and 30 paired rows.")
         table = pd.crosstab(valid[fields[0]], valid[fields[1]])
+        meta["category_order"] = {
+            axis: dataset.field(fid).order
+            for axis, fid in zip(("x", "y"), fields)
+            if dataset.field(fid).order
+        }
         for x in table.index:
             for y in table.columns:
                 ids = valid.index[(valid[fields[0]] == x) & (valid[fields[1]] == y)].tolist()

@@ -1,6 +1,6 @@
 # Current implementation context
 
-Updated 23 November 2026 after the UI refinement of First Look 0.3. Read [UI refinement](ui-uplift.md) for current presentation, review sources and validation.
+Updated 23 November 2026 after the chart design audit of First Look 0.3. Read the [chart audit](../research/chart-design-audit.md) for rendering constraints and provider guidance, and [UI refinement](ui-uplift.md) for the surrounding presentation.
 
 ## Product and architecture
 
@@ -37,6 +37,14 @@ Jev can prioritize a missing eligible distribution task using its existing decis
 
 Read [UI refinement](ui-uplift.md) before changing layout. Pages use compact navigation-matched headings and a shared dataset/population strip. Understand starts investigation near the top; settings and dataset switching are secondary controls. Field editing and a visible field inspector share a row. Meaning places one open decision beside the quantity editor. Explore hides construction controls after a result exists. Findings is a gallery; its Inspect actions navigate to hidden `app_pages/inspect.py` so the detail opens at the top without duplicate charts or retained gallery scroll. Compare/Challenge keep related evidence together. Evidence provides top exports and a selected-pin note editor; all pins and their notes remain in the brief. Native navigation `help` explains each work area. Theme configuration, static wordmarks and native layouts own presentation; no custom frontend.
 
+### Current chart policy
+
+The finite catalog now has thirteen templates, including frequency polygons, saved-quantile deviations and validated treemaps. `visualization/layout.py` controls square inner scatter/density geometry through native dimensions/media options; it does not equate unrelated data units. `compiler.py` and `review_assets.py` share encoded quantities, numerical domains, category order, collision-resolved group colours and colour limits. Histogram bars preserve recorded numeric intervals. Magnitude/facet bars include zero; only correlation-summary dots get a fixed −1..+1 domain. Signed residual heatmaps diverge around zero; counts remain sequential. Range boxes declare min/max whiskers. Observed/predicted diagnostics use identity and residual diagnostics use zero.
+
+`visualization/composition.py` permits original amount binding only for the engine's validated complete concentration recipe. `ChartSpec.value_field` preserves the distinction between cumulative share and original amount; changing the representation never overwrites the result. Pins preserve that chart contract. Treemap zero parts remain in the table, and the initial overview choice uses a visible editable panel row budget, not a purported Few threshold. Two-group frequency polygons use common full-source edges and within-group proportions. `visualization/quantiles.py` displays only saved full-source quantile differences against probability, with a horizontal zero reference and no invented curve or source membership. Compare shows this third chart alongside the two population views; group-shape results expose it as a companion.
+
+`visualization/guidance.py` separates ten Python-owned invariants from seven conditional preferences. Jev receives atomic eligible-choice guidance; Terra receives visual-hypothesis and supported-check guidance. Both real adapters transmit a compact versioned `chart_policy` and record its request state/instructions. Preferences do not grant execution permissions. The rule registry appears in chart safeguards. Controlled SDK assertions verify actual outgoing requests; they are not live-model validation.
+
 ## Accepted user decisions
 
 - Host repository root `streamlit_app.py` on Streamlit Community Cloud with Python 3.12.
@@ -47,7 +55,7 @@ Read [UI refinement](ui-uplift.md) before changing layout. Pages use compact nav
 
 ## Validation
 
-Current suite: 175 tests passed, lint/format/type checks passed after the UI refinement. Controlled official SDK checks passed with no live provider calls. Real agent API tests cover original navigation/export and semantic metric execution/context invalidation. Browser assertions cover native chart selection/apply/reset/download, responsive light/dark layout and the semantic metric workflow. The earlier functional checks captured no screenshots/video/traces. The later UI review uses screenshots of bundled examples.
+Current suite: 232 tests passed; lint, format, type checks and runtime-only deployment packaging passed after the chart audit. Controlled official SDK checks include transmitted chart policies, recorded state hashes and role instructions, with no live provider calls. Real agent API checks passed for exploration/comparison preservation and semantic metric execution/context invalidation. The isolated native chart fixture rendered all thirteen templates at desktop and narrow widths, measured square inner scatter/density areas and touching histogram bins, and verified actual treemap selection through its virtual root. See the [chart audit](../research/chart-design-audit.md) for measurements and the repeatable script. Earlier browser assertions cover native chart selection/apply/reset/download, responsive light/dark layout and the semantic metric workflow. Functional smoke checks capture no screenshots/video/traces; the earlier UI review uses screenshots of bundled examples.
 
 The current 50,000-row/20-field measured workload recorded approximately 3.6 seconds for discovery and 360 MiB peak process RSS on the declared local machine. These are not Community Cloud guarantees or a productivity experiment. That earlier version-0.2 validation of 13 version-1 outputs is historical; version 0.3 explicitly separates legacy inspection from current-recipe recomputation. Current exploration artifacts are under `docs/development/validation/exploration-*`; older semantic artifacts remain historical.  regenerate new measurements in ignored `reports/`.
 

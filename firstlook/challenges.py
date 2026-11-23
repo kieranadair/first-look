@@ -180,7 +180,9 @@ def challenge(
                     "records": [{"label": "Pearson r", "value": p}, {"label": "Spearman ρ", "value": s}],
                 }
             )
+            result.metadata = {**result.metadata, "correlation": True}
             chart = original_chart(finding, result, "dot", summary)
+            chart.x_label, chart.y_label = "Correlation coefficient", ""
         elif operation == "quantile_bin_summary":
             result, f = analyze(
                 dataset, ctx, plan_for(ctx, operation, fields, "What do conditional medians reveal?")
