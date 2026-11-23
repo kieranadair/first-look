@@ -7,10 +7,11 @@ from firstlook.ui.runtime import workspace
 
 ws = workspace()
 page_header(
-    "Keep the evidence together.",
-    "Useful observations, changed interpretations, open questions—and the path that produced them.",
+    "Evidence",
+    "Keep observations, checks and your interpretation together. Export the investigation when you are ready.",
+    compact=True,
 )
-with st.expander("Open a saved investigation"):
+with st.popover("Open a saved investigation", icon=":material/folder_open:"):
     bundle = st.file_uploader("Investigation bundle", type=["zip"], key="bundle_upload")
     if bundle is not None and st.button("Open recorded evidence", key="import_bundle"):
         try:
@@ -20,11 +21,26 @@ with st.expander("Open a saved investigation"):
             st.rerun()
         except (ValueError, KeyError) as exc:
             st.error(str(exc))
-if ws.comparisons:
-    st.subheader("Preserved comparisons")
-    st.caption(
-        "Each board retains its own exact selected/reference populations, definitions and compatible display. Select one board at a time to keep its related evidence together."
+
+# Capture the previous editor before switching the selected pin or content view.
+for item in ws.pins:
+    note_key = "note_" + item["finding"]["id"]
+    if note_key in st.session_state:
+        item["note"] = st.session_state[note_key]
+
+downloads = st.container(border=True)
+saved_view = (
+    st.segmented_control(
+        "Saved evidence",
+        ["Observations", "Comparisons"],
+        default="Observations" if ws.pins or not ws.comparisons else "Comparisons",
+        key="evidence_view",
     )
+    if ws.comparisons
+    else "Observations"
+) or "Observations"
+if saved_view == "Comparisons":
+    st.caption("Each board retains its own populations, definitions and compatible display.")
     chosen = st.selectbox(
         "Comparison board",
         [b.id for b in ws.comparisons],
@@ -41,23 +57,40 @@ if ws.investigation is None:
         st.info(
             "The current analytical definition changed. Your earlier evidence retains its original definitions. Run a new investigation to prepare a combined portable bundle."
         )
-        for item in ws.pins:
-            with st.container(border=True):
-                st.subheader(item["finding"]["title"])
-                st.markdown(item["finding"]["observation"])
-                st.caption(
-                    "Preserved from an earlier analytical context: " + item["result"]["plan"]["context"]
-                )
-                with st.expander("Original analytical definition"):
-                    st.json(item.get("semantic_contract"), expanded=False)
-        st.download_button(
-            "Download preserved brief", brief(ws), "first-look-preserved-brief.md", "text/markdown"
-        )
+        if saved_view == "Observations":
+            for item in ws.pins:
+                with st.container(border=True):
+                    st.markdown("**" + item["finding"]["title"] + "**")
+                    st.markdown(item["finding"]["observation"])
+                    if item.get("note"):
+                        st.caption("Your interpretation: " + item["note"])
+                    st.caption(
+                        "Preserved from an earlier analytical context: " + item["result"]["plan"]["context"]
+                    )
+                    with st.expander("Original analytical definition"):
+                        st.json(item.get("semantic_contract"), expanded=False)
+        with downloads:
+            st.download_button(
+                "Download preserved brief",
+                brief(ws),
+                "first-look-preserved-brief.md",
+                "text/markdown",
+                icon=":material/download:",
+            )
+        st.page_link("app_pages/explore.py", label="Build a new overview", icon=":material/explore:")
     else:
-        st.info("Pin observations from Discover or Challenge. You can also open a saved bundle above.")
+        with downloads:
+            st.caption("Pin an observation in Findings or Challenge to start an evidence brief.")
+            st.page_link(
+                "app_pages/understand.py" if ws.dataset is None else "app_pages/explore.py",
+                label="Open a dataset" if ws.dataset is None else "Explore the dataset",
+                icon=":material/explore:",
+            )
     st.stop()
-st.caption(f"{len(ws.pins)} PINNED OBSERVATIONS  ·  {len(ws.investigation.challenges)} RECORDED CHECKS")
-if not ws.pins:
+st.caption(
+    f"{len(ws.pins)} pinned observations · {len(ws.comparisons)} saved comparisons · {len(ws.investigation.challenges)} recorded checks"
+)
+if not ws.pins and saved_view == "Observations":
     st.markdown("### Start an evidence brief.")
     st.caption("Use Pin on an observation. Its computed values and completed checks travel with it.")
     if st.button("Pin the leading observation", icon=":material/bookmark:"):
@@ -66,10 +99,22 @@ if not ws.pins:
         if ws.investigation.findings:
             pin(ws, ws.investigation.findings[0].id)
             st.rerun()
-for i, item in enumerate(ws.pins):
+if ws.pins and saved_view == "Observations":
+    pin_id = st.selectbox(
+        "Pinned observation · brief order",
+        [item["finding"]["id"] for item in ws.pins],
+        format_func=lambda value: next(
+            f"{i + 1:02} · {item['finding']['title']}"
+            for i, item in enumerate(ws.pins)
+            if item["finding"]["id"] == value
+        ),
+        key="evidence_pin",
+    )
+    i = next(i for i, item in enumerate(ws.pins) if item["finding"]["id"] == pin_id)
+    item = ws.pins[i]
     f = item["finding"]
     with st.container(border=True):
-        st.caption(f"EVIDENCE {i + 1:02}  ·  {f['claim_type'].upper()}")
+        st.caption(f"Observation {i + 1} of {len(ws.pins)} · {f['claim_type']}")
         st.subheader(f["title"])
         st.markdown(f["observation"])
         if item["result"]["plan"]["context"] != ws.investigation.context.id:
@@ -87,27 +132,34 @@ for i, item in enumerate(ws.pins):
             value=item.get("note", ""),
             key="note_" + f["id"],
             max_chars=4000,
+            height=110,
+            placeholder="What does this suggest? What should you check next?",
         )
         item["note"] = note
         with st.container(horizontal=True):
-            if st.button("Move up", key="up_" + f["id"], disabled=i == 0):
+            if st.button("Move up", key="up_" + f["id"], disabled=i == 0, icon=":material/arrow_upward:"):
                 ws.pins[i - 1], ws.pins[i] = ws.pins[i], ws.pins[i - 1]
                 st.rerun()
-            if st.button("Remove", key="remove_" + f["id"]):
+            if st.button("Remove", key="remove_" + f["id"], type="tertiary", icon=":material/close:"):
                 ws.pins.pop(i)
                 st.rerun()
 
-st.subheader("Take the investigation with you.")
-include = st.checkbox(
-    "Include the original dataset",
-    value=False,
-    key="include_raw",
-    disabled=ws.dataset is None or ws.dataset.frame.empty,
-    help="Saved result tables can still contain private data when this is off.",
-)
-st.caption(
-    "The bundle includes the semantic contract, assertion and decision ledgers, metric definitions, contexts, calculations, chart contracts, challenges and recorded model decisions. API keys are excluded. Stored results can be inspected without another API call."
-)
+with downloads:
+    st.markdown("**Take the investigation with you**")
+    st.caption(
+        "A portable bundle preserves definitions, results and checks. A readable brief includes your notes."
+    )
+    with st.container(horizontal=True, vertical_alignment="center"):
+        include = st.checkbox(
+            "Include the original dataset",
+            value=False,
+            key="include_raw",
+            disabled=ws.dataset is None or ws.dataset.frame.empty,
+            help="Saved result tables can still contain private data when this is off. API keys are always excluded.",
+        )
+        prepare = st.button(
+            "Prepare downloads", type="primary", icon=":material/inventory_2:", key="prepare_export"
+        )
 export_state = digest(
     [
         ws.investigation.context.id,
@@ -123,7 +175,7 @@ export_state = digest(
         ws.investigation.coverage,
     ]
 )
-if st.button("Prepare downloads", type="primary", icon=":material/inventory_2:", key="prepare_export"):
+if prepare:
     try:
         blob = export_bundle(ws, include)
         st.session_state.prepared_bundle = blob
@@ -132,7 +184,7 @@ if st.button("Prepare downloads", type="primary", icon=":material/inventory_2:",
     except ValueError as exc:
         st.error(str(exc))
 if st.session_state.get("prepared_bundle") and st.session_state.get("prepared_context") == export_state:
-    with st.container(horizontal=True):
+    with downloads.container(horizontal=True):
         st.download_button(
             "Download investigation",
             st.session_state.prepared_bundle,

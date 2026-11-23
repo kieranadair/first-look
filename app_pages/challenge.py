@@ -4,17 +4,23 @@ from typing import Any, cast
 from firstlook.challenges import LABELS, challenge, eligible
 from firstlook.semantics import dimensions
 from firstlook.state import pin
-from firstlook.ui.components import STATUS, chart_view, page_header, render_chart
+from firstlook.ui.components import STATUS, chart_view, page_header, render_chart, scope_caption
 from firstlook.ui.runtime import workspace
 from firstlook.visualization.compiler import axis_domains
 
 ws = workspace()
 page_header(
-    "Give a finding a second look.",
-    "A useful observation becomes more useful when you know what could change it.",
+    "Challenge",
+    "Put an observation beside a declared alternative. See what changes and what holds up.",
+    compact=True,
 )
 if ws.investigation is None:
-    st.info("Run an investigation in Discover before choosing a finding to challenge.")
+    st.caption("Build an overview, then choose an observation to give it a second look.")
+    st.page_link(
+        "app_pages/understand.py" if ws.dataset is None else "app_pages/explore.py",
+        label="Open a dataset" if ws.dataset is None else "Build an overview in Explore",
+        icon=":material/explore:",
+    )
     st.stop()
 inv, ds = ws.investigation, ws.dataset
 assert ds is not None
@@ -22,51 +28,64 @@ ids = [f.id for f in inv.findings]
 key = "challenge_parent_" + inv.context.id
 if ws.challenge_id in ids and st.session_state.get(key) != ws.challenge_id:
     st.session_state[key] = ws.challenge_id
-selected = st.selectbox(
-    "Observation", ids, key=key, format_func=lambda i: next(f.title for f in inv.findings if f.id == i)
-)
+toolbar = st.container(horizontal=True, vertical_alignment="bottom", gap="small")
+with toolbar:
+    selected = st.selectbox(
+        "Observation", ids, key=key, format_func=lambda i: next(f.title for f in inv.findings if f.id == i)
+    )
 ws.challenge_id = selected
 finding = next(f for f in inv.findings if f.id == selected)
 ops = eligible(ds, inv, finding) if not ws.replay else []
-if ops:
-    with st.container(horizontal=True, vertical_alignment="bottom"):
-        operation = st.selectbox(
-            "Next check",
-            ops,
-            format_func=lambda op: LABELS.get(op, op.replace("_", " ")),
-            key="check_operation",
+checks = [c for c in inv.challenges if c.parent_id == selected]
+if checks:
+    check_ids = [c.id for c in checks]
+    with toolbar:
+        active = st.selectbox(
+            "Completed check",
+            check_ids,
+            key="completed_check_" + selected,
+            format_func=lambda i: next(
+                LABELS.get(c.operation, c.operation) + " · " + STATUS[c.status][0]
+                for c in checks
+                if c.id == i
+            ),
         )
-        group = None
-        if operation in {"subgroup", "missingness"}:
-            options = dimensions(ds)
-            group = st.selectbox("Recorded group", options, format_func=ds.label, key="check_group")
-        if st.button(
-            "Run this check", type="primary", icon=":material/compare_arrows:", disabled=bool(ws.job_id)
-        ):
-            check = challenge(ds, inv, finding, operation, group)
-            inv.challenges = [c for c in inv.challenges if c.id != check.id] + [check]
-            st.rerun()
+        builder = st.popover("Run another check", icon=":material/add:") if ops else None
 else:
+    builder = st.container()
+if ops:
+    assert builder is not None
+    with builder:
+        with st.container(horizontal=True, vertical_alignment="bottom"):
+            operation = st.selectbox(
+                "Next check",
+                ops,
+                format_func=lambda op: LABELS.get(op, op.replace("_", " ")),
+                key="check_operation",
+            )
+            group = None
+            if operation in {"subgroup", "missingness"}:
+                options = dimensions(ds)
+                group = st.selectbox("Recorded group", options, format_func=ds.label, key="check_group")
+            if st.button(
+                "Run this check", type="primary", icon=":material/compare_arrows:", disabled=bool(ws.job_id)
+            ):
+                check = challenge(ds, inv, finding, operation, group)
+                inv.challenges = [c for c in inv.challenges if c.id != check.id] + [check]
+                st.rerun()
+elif not checks:
     st.caption(
         "The supported checks for this observation are recorded below."
         if ws.replay
         else "No further check in the current catalog meets this view’s prerequisites."
     )
 
-checks = [c for c in inv.challenges if c.parent_id == selected]
 if checks:
-    check_ids = [c.id for c in checks]
-    active = st.selectbox(
-        "Completed check",
-        check_ids,
-        key="completed_check_" + selected,
-        format_func=lambda i: next(
-            LABELS.get(c.operation, c.operation) + " · " + STATUS[c.status][0] for c in checks if c.id == i
-        ),
-    )
     current = next(c for c in checks if c.id == active)
     label, color = STATUS[current.status]
-    st.badge(label, color=cast(Any, color))
+    with st.container(horizontal=True, vertical_alignment="center"):
+        st.badge(label, color=cast(Any, color))
+        st.caption("Applies to this check; it does not establish an explanation or causality.")
     st.markdown(current.summary)
     original = inv.results[finding.result_id]
     alternative = current.result
@@ -97,25 +116,25 @@ if checks:
         alternative = alternative.model_copy(deep=True)
         original.metadata["comparison_domains"] = {**a, **common}
         alternative.metadata["comparison_domains"] = {**b, **common}
-    grid = st.grid(2, min_column_width=420, gap="small")
+    grid = st.grid(2, min_column_width=330, gap="small")
     with grid.cell():
         with st.container(border=True):
-            st.caption("ORIGINAL EVIDENCE")
-            st.markdown("**Recorded context**")
-            chart_view(finding.chart, original, "challenge_original_" + finding.id, height=360)
+            st.markdown("**Original evidence**")
+            st.caption(scope_caption(original))
+            chart_view(finding.chart, original, "challenge_original_" + finding.id, height=320)
             st.caption(finding.observation)
     with grid.cell():
         with st.container(border=True):
-            st.caption("UNDER THIS CHECK")
-            st.markdown("**Declared alternative**")
+            st.markdown("**Under this check**")
             if alternative and current.chart:
-                chart_view(current.chart, alternative, "challenge_alternative_" + current.id, height=360)
-                st.caption(
-                    f"{current.result.support:,} supporting observations · {current.result.missing:,} missing"
-                )
+                st.caption(scope_caption(alternative))
+                chart_view(current.chart, alternative, "challenge_alternative_" + current.id, height=320)
             else:
                 st.info(current.summary)
-    with st.expander("Check quantities and assumptions"):
+    if current.result:
+        for warning in current.result.warnings:
+            st.caption(warning)
+    with st.expander("Computed values and check details"):
         if current.result:
             st.json(current.result.metrics)
             st.dataframe(
@@ -123,13 +142,13 @@ if checks:
                 hide_index=True,
                 alt="Computed quantities from the selected challenge",
             )
-        st.caption(
-            "Changed/similar labels apply only to this declared check. They do not prove an interpretation true."
-        )
 else:
     st.markdown(finding.observation)
-    render_chart(finding, inv, suffix="unchallenged", height=380)
+    render_chart(finding, inv, suffix="unchallenged", height=330)
+    st.caption(scope_caption(inv.results[finding.result_id]))
     st.caption("Choose an applicable check above to compare it with the original.")
-if st.button("Pin observation with its checks", icon=":material/bookmark:", key="pin_challenged"):
-    pin(ws, finding.id)
-    st.toast("Observation and checks are in Evidence.")
+with st.container(horizontal=True):
+    if st.button("Pin observation with its checks", icon=":material/bookmark:", key="pin_challenged"):
+        pin(ws, finding.id)
+        st.toast("Observation and checks are in Evidence.")
+    st.page_link("app_pages/discover.py", label="Back to findings", icon=":material/arrow_back:")

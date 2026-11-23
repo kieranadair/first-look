@@ -41,15 +41,15 @@ def main():
     interact(trigger={"key": "example_semantic"})
     interact(page="meaning")
     assert all(
-        label in text() for label in ["Quantity meaning", "Run a metric", "Time is an observation process."]
+        any(a["key"] == key for a in state["actions"])
+        for key in ("meaning_field", "metric_existing", "metric_groups", "download_contract")
     )
-    assert any(a["key"] == "download_contract" for a in state["actions"])
     interact(widget_state={"metric_existing": "Sales per distinct order", "metric_groups": ["category"]})
-    click("Compute and add to Discover")
-    assert state["page"]["url_path"] == "discover"
+    interact(trigger={"key": "compute_metric"})
+    assert state["page"]["url_path"] == "inspect"
     assert "average_per_entity" in text() and "Sales per distinct order" in text()
     assert any(n["type"] == "echarts_chart" for n in walk(state["tree"]))
-    click("Pin")
+    interact(trigger={"key": "inspect_pin"})
     interact(page="challenge")
     assert "Compare row and entity averaging" in text()
     interact(page="evidence")
@@ -61,7 +61,7 @@ def main():
     key = action("What kind of quantity?")
     interact(widget_state={key: "state"}, trigger={"key": action("Confirm quantity meaning")})
     interact(page="discover")
-    assert "Run the local investigation" in text() and not any(
+    assert any(a.get("label") == "Run local investigation" for a in state["actions"]) and not any(
         n["type"] == "echarts_chart" for n in walk(state["tree"])
     )
     report = {

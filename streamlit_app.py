@@ -5,43 +5,106 @@ import streamlit as st
 from firstlook.ui.runtime import poll_job, settings, workspace
 
 st.set_page_config(
-    page_title="First Look · discover, challenge, preserve", page_icon=":material/query_stats:", layout="wide"
+    page_title="First Look · discover, challenge, preserve",
+    page_icon=":material/query_stats:",
+    layout="wide",
+    initial_sidebar_state=240,
 )
 ws, cfg = workspace(), settings()
-st.logo("static/mark.png", icon_image="static/mark.png", size="small")
-with st.sidebar:
-    st.markdown("## First Look")
-    st.caption("Discover. Challenge. Preserve.")
+st.logo(
+    "static/wordmark-dark.svg" if st.context.theme.type == "dark" else "static/wordmark.svg",
+    icon_image="static/mark.png",
+    size="medium",
+)
 pages = {
     "Prepare": [
-        st.Page("app_pages/understand.py", title="Understand", icon=":material/table_chart:", default=True),
-        st.Page("app_pages/meaning.py", title="Meaning", icon=":material/schema:"),
+        st.Page(
+            "app_pages/understand.py",
+            title="Understand",
+            icon=":material/table_chart:",
+            default=True,
+            help="Open a table, inspect its fields and set the direction for your first investigation.",
+        ),
+        st.Page(
+            "app_pages/meaning.py",
+            title="Meaning",
+            icon=":material/schema:",
+            help="Define quantities, entities, metrics and time policies that every analysis can reuse.",
+        ),
     ],
     "Investigate": [
-        st.Page("app_pages/explore.py", title="Explore", icon=":material/explore:"),
-        st.Page("app_pages/discover.py", title="Findings", icon=":material/query_stats:"),
-        st.Page("app_pages/compare.py", title="Compare", icon=":material/compare_arrows:"),
-        st.Page("app_pages/models.py", title="Models", icon=":material/model_training:"),
-        st.Page("app_pages/challenge.py", title="Challenge", icon=":material/compare_arrows:"),
+        st.Page(
+            "app_pages/explore.py",
+            title="Explore",
+            icon=":material/explore:",
+            help="Examine distributions, categories, relationships and time from complementary perspectives.",
+        ),
+        st.Page(
+            "app_pages/discover.py",
+            title="Findings",
+            icon=":material/query_stats:",
+            help="Browse computed observations, ask a question and inspect the evidence behind a finding.",
+        ),
+        st.Page(
+            "app_pages/inspect.py",
+            title="Inspect finding",
+            icon=":material/open_in_full:",
+            visibility="hidden",
+        ),
+        st.Page(
+            "app_pages/compare.py",
+            title="Compare",
+            icon=":material/compare_arrows:",
+            help="Keep a selected cohort beside its reference and compare their recorded populations.",
+        ),
+        st.Page(
+            "app_pages/models.py",
+            title="Models",
+            icon=":material/model_training:",
+            help="Evaluate a prediction task and inspect performance on the same held-out observations.",
+        ),
+        st.Page(
+            "app_pages/challenge.py",
+            title="Challenge",
+            icon=":material/fact_check:",
+            help="Check how a finding changes under a declared alternative, with both views together.",
+        ),
     ],
     "Preserve": [
-        st.Page("app_pages/evidence.py", title="Evidence", icon=":material/bookmarks:"),
+        st.Page(
+            "app_pages/evidence.py",
+            title="Evidence",
+            icon=":material/bookmarks:",
+            help="Annotate saved findings, revisit comparisons and export a reproducible investigation.",
+        ),
     ],
 }
 navigation = st.navigation(pages)
 with st.sidebar:
     if ws.dataset:
-        st.space("small")
-        st.caption("CURRENT DATASET")
+        st.caption("Current dataset")
         st.markdown(f"**{ws.dataset.record.name}**")
-        st.caption(f"{ws.dataset.record.rows:,} rows · {ws.dataset.record.columns} fields")
+        active = len(ws.context().row_ids) if not ws.dataset.frame.empty else ws.dataset.record.rows
+        st.caption(f"{active:,} / {ws.dataset.record.rows:,} rows · {ws.dataset.record.columns} fields")
         if ws.focus:
             st.caption("Focus: " + ws.dataset.label(ws.focus))
-        st.caption(f"{len(ws.pins)} pinned observations")
-    st.space("medium")
+        st.page_link(
+            "app_pages/evidence.py",
+            label=f"{len(ws.pins)} pinned · {len(ws.comparisons)} comparisons",
+            icon=":material/bookmarks:",
+        )
     ready = [n for n in ("jev", "tabpfn", "terra") if cfg.available(n)]
-    st.caption("MODEL CONNECTIONS")
-    st.caption("Configured: " + ", ".join(ready) if ready else "Local analysis · API keys not configured")
+    st.caption("Model connections")
+    st.caption("Configured: " + ", ".join(ready) if ready else "Local analysis · no API keys needed")
+    if ready:
+        st.caption(
+            "External analysis "
+            + (
+                "permitted for this dataset"
+                if st.session_state.get("external_ok")
+                else "off for this dataset"
+            )
+        )
     with st.expander("About this workbench"):
         st.caption(
             "An open-source exploration utility. Descriptive patterns and predictive diagnostics do not establish causality."

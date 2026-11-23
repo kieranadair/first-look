@@ -40,6 +40,7 @@ The browser test verifies actual chart-mark selection, filtering/reset, download
 ## Reference material
 
 - [Current implementation context](CONTEXT.md)
+- [Interface refinement and design rationale](ui-uplift.md), including the authorized screenshot review of bundled examples
 - [Comparison/exploration uplift](exploration-uplift.md) and [build design](exploration-uplift-plan.md)
 - [Semantic uplift build report](semantic-uplift.md) and [research-to-implementation mapping](../research/semantic-contract.md)
 - [Original design specification](specification.md), preserved as design history, not a second setup guide

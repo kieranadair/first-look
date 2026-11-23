@@ -8,16 +8,21 @@ from firstlook.ui.runtime import settings, start_model, workspace
 
 ws, cfg = workspace(), settings()
 page_header(
-    "Look for predictive structure.",
+    "Models",
     "Evaluate a declared prediction task, then inspect where the recorded holdout succeeds or struggles.",
     compact=True,
 )
 if ws.dataset is None or ws.investigation is None:
-    st.info("Open a dataset and build an overview in Explore first.")
+    st.caption("Build an overview before evaluating a prediction task and its held-out evidence.")
+    st.page_link(
+        "app_pages/understand.py" if ws.dataset is None else "app_pages/explore.py",
+        label="Open a dataset" if ws.dataset is None else "Build an overview in Explore",
+        icon=":material/explore:",
+    )
     st.stop()
 inv, ds = ws.investigation, ws.dataset
 st.caption(
-    "Choose a target that has meaning at prediction time. Local baselines and hosted TabPFN share the same holdout. Cohort comparisons reuse recorded predictions; they do not refit or create fresh validation."
+    "Local baselines and hosted TabPFN share a holdout. A prediction score describes the declared task; it does not establish causality."
 )
 
 configure = (
@@ -27,10 +32,7 @@ configure = (
 )
 if ws.model is None or getattr(configure, "open", False):
     with configure:
-        st.subheader("Look for structure the summaries can miss.")
-        st.caption(
-            "Compare held-out prediction with fixed-budget baselines. A high score is not a causal explanation."
-        )
+        st.markdown("**Define the prediction task**")
         if not ws.replay:
             targets = eligible_targets(ds)
             if not targets:
@@ -39,22 +41,23 @@ if ws.model is None or getattr(configure, "open", False):
                 )
             else:
                 default = targets.index(ws.focus) if ws.focus in targets else 0
-                target = st.selectbox(
-                    "Model focus", targets, index=default, format_func=ds.label, key="model_target"
-                )
                 from firstlook.semantic.model import get_model
 
                 declared_group = get_model(ds).model_group
-                split = st.selectbox(
-                    "Evaluation split",
-                    ["group"] if declared_group else ["random", "group", "time"],
-                    format_func=lambda x: {
-                        "random": "Held-out rows",
-                        "group": "Unseen groups",
-                        "time": "Later observations",
-                    }[x],
-                    key="model_split",
-                )
+                with st.container(horizontal=True, vertical_alignment="bottom"):
+                    target = st.selectbox(
+                        "Model focus", targets, index=default, format_func=ds.label, key="model_target"
+                    )
+                    split = st.selectbox(
+                        "Evaluation split",
+                        ["group"] if declared_group else ["random", "group", "time"],
+                        format_func=lambda x: {
+                            "random": "Held-out rows",
+                            "group": "Unseen groups",
+                            "time": "Later observations",
+                        }[x],
+                        key="model_split",
+                    )
                 split_field = None
                 if split != "random":
                     options = (
@@ -76,6 +79,7 @@ if ws.model is None or getattr(configure, "open", False):
                     default=candidates,
                     format_func=ds.label,
                     key=f"predictors_{target}_{split}_{split_field}",
+                    help="Use fields that would be known when predicting this target. Contract exclusions still apply.",
                 )
                 with st.expander("Excluded fields and protocol"):
                     for f, reason in excluded.items():
@@ -93,6 +97,15 @@ if ws.model is None or getattr(configure, "open", False):
                     st.caption(
                         "TabPFN is not configured. The same evaluation can run with actual local baselines."
                     )
+                elif not st.session_state.get("external_ok"):
+                    st.caption(
+                        "Hosted TabPFN sends permitted training and test values to Prior Labs. Allow external analysis in Understand, or uncheck it to use local baselines."
+                    )
+                    st.page_link(
+                        "app_pages/understand.py", label="Review dataset permission", icon=":material/tune:"
+                    )
+                else:
+                    st.caption("Hosted TabPFN uses the dataset permission granted in Understand.")
                 if st.button(
                     "Evaluate predictive structure",
                     type="primary",
@@ -139,7 +152,7 @@ if ws.model:
         key="model_diagnostic_mode",
     )
     chosen = groups if mode == "Group errors" else pairs or groups
-    grid = st.grid(2, min_column_width=350, gap="small")
+    grid = st.grid(2, min_column_width=330, gap="small")
     for f in chosen[:2]:
         with grid.cell():
             finding_card(f, inv)

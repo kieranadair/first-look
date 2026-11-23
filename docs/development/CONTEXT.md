@@ -1,10 +1,10 @@
 # Current implementation context
 
-Updated 22 November 2026 after the Part II exploration/comparison uplift (First Look 0.3).
+Updated 23 November 2026 after the UI refinement of First Look 0.3. Read [UI refinement](ui-uplift.md) for current presentation, review sources and validation.
 
 ## Product and architecture
 
-First Look is a Python-only open-source visual investigation workbench. Eight native Streamlit work areas: Understand, Meaning, Explore, Findings, Compare, Models, Challenge, Evidence. The original `discover.py` path remains the Findings page. Python 3.12, Streamlit 1.67. Runtime requirements are pinned; Pint is the only added runtime dependency in this uplift. No SaaS/account/database layer, local foundation-model weights, authored frontend or data lineage system.
+First Look is a Python-only open-source visual investigation workbench. Eight visible native Streamlit work areas and a hidden linked Inspect finding detail route: Understand, Meaning, Explore, Findings, Compare, Models, Challenge, Evidence. The original `discover.py` path remains the Findings page. Python 3.12, Streamlit 1.67. Runtime requirements are pinned; Pint is the only added runtime dependency in this uplift. No SaaS/account/database layer, local foundation-model weights, authored frontend or data lineage system.
 
 `firstlook/semantic_contracts.py` defines the scoped semantic model. `firstlook/semantic/profile.py` performs bounded exact structural discovery and heuristic proposals; `model.py` validates/commits/imports declarations; `policy.py` evaluates operation permissions; `planner.py` shares metric plans and bounded metadata packets; `engine.py` executes the typed algebra; `checks.py` compares definitions. Existing numerical discovery and diagnostic views remain available while business decisions are unresolved.
 
@@ -28,21 +28,26 @@ Preview selection preserves the investigation, model and allowances. Compare com
 
 Metric top-K ranks the requested quantity before creating Other. Group comparisons freeze identities/remainder membership and compare by keys. ECDF compression respects tied mass and certifies vertical error; reported quantiles, CDF distances and threshold queries use source values. Native/review renderers share endpoint extensions with no invented source members. Scatter statistics, visible points and review reductions have separate scopes. Conditional center/spread renders existing quartiles and screens variance-only patterns. Geometry guards exclude unsupported scalar prediction targets.
 
-Explore, Compare and Models are separate pages under the user's latest instruction. Keep related evidence together; use compact headers, adjacent panels, visible definitions/support and short workflow guidance. Configuration can move into a secondary control after computation. Essential analytical views do not live in expanders. Models displays related diagnostic pairs and reuses recorded holdouts; no brush triggers a model refit. Python-only, native Streamlit/ECharts and screenshot-free verification remain requirements.
+Explore, Compare and Models are separate pages under the user's latest instruction. Keep related evidence together; use compact headers, adjacent panels, visible definitions/support and short workflow guidance. Configuration can move into a secondary control after computation. Essential analytical views do not live in expanders. Models displays related diagnostic pairs and reuses recorded holdouts; no brush triggers a model refit. Python-only and native Streamlit/ECharts remain requirements. The user authorized screenshots for UI review on 23 November 2026; the earlier screenshot prohibition is superseded. Automated browser smoke scripts still avoid image capture.
 
 Jev can prioritize a missing eligible distribution task using its existing decision call. Terra receives coherent companions and can review one selected/reference board per investigation, propose bounded child-context checks and synthesize them. The deterministic core remains complete without keys. Live provider effectiveness, Cloud availability and human productivity are unmeasured.
+
+
+## Current interface
+
+Read [UI refinement](ui-uplift.md) before changing layout. Pages use compact navigation-matched headings and a shared dataset/population strip. Understand starts investigation near the top; settings and dataset switching are secondary controls. Field editing and a visible field inspector share a row. Meaning places one open decision beside the quantity editor. Explore hides construction controls after a result exists. Findings is a gallery; its Inspect actions navigate to hidden `app_pages/inspect.py` so the detail opens at the top without duplicate charts or retained gallery scroll. Compare/Challenge keep related evidence together. Evidence provides top exports and a selected-pin note editor; all pins and their notes remain in the brief. Native navigation `help` explains each work area. Theme configuration, static wordmarks and native layouts own presentation; no custom frontend.
 
 ## Accepted user decisions
 
 - Host repository root `streamlit_app.py` on Streamlit Community Cloud with Python 3.12.
 - Owner credentials belong in server-side Cloud Secrets/environment variables. The user considered BYO keys, then chose owner keys and provider caps. No frontend or session-state key entry.
 - Owner supplies Jev/TypeSafe, hosted TabPFN and OpenAI Terra credentials later. Dedicated keys/provider hard limits remain owner setup.
-- No screenshots of the live app, user-testing gate, custom CSS or JavaScript frontend. Tests use AppTest, the development agent API and image-free Python browser assertions.
+- Screenshots are authorized for UI review as of 23 November 2026. No user-testing gate, custom CSS or JavaScript frontend. Keep captures of bundled examples under ignored reports. Automated checks use AppTest, a localhost-only development agent API and image-free browser assertions.
 - Publish as the open-source GitHub repository `kieranadair/first-look`. Deployment, research and future-session notes are separated. Do not commit secrets, uploaded data or live provider transcripts.
 
 ## Validation
 
-Current suite: 175 tests passed, lint/format/type checks passed. Controlled official SDK checks passed with no live provider calls. Real agent API tests cover original navigation/export and semantic metric execution/context invalidation. Browser assertions cover native chart selection/apply/reset/download, responsive light/dark layout and the semantic metric workflow. No screenshots/video/traces.
+Current suite: 175 tests passed, lint/format/type checks passed after the UI refinement. Controlled official SDK checks passed with no live provider calls. Real agent API tests cover original navigation/export and semantic metric execution/context invalidation. Browser assertions cover native chart selection/apply/reset/download, responsive light/dark layout and the semantic metric workflow. The earlier functional checks captured no screenshots/video/traces. The later UI review uses screenshots of bundled examples.
 
 The current 50,000-row/20-field measured workload recorded approximately 3.6 seconds for discovery and 360 MiB peak process RSS on the declared local machine. These are not Community Cloud guarantees or a productivity experiment. That earlier version-0.2 validation of 13 version-1 outputs is historical; version 0.3 explicitly separates legacy inspection from current-recipe recomputation. Current exploration artifacts are under `docs/development/validation/exploration-*`; older semantic artifacts remain historical.  regenerate new measurements in ignored `reports/`.
 

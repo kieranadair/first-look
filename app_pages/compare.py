@@ -11,12 +11,13 @@ from firstlook.ui.runtime import start_comparison, start_comparison_review, work
 
 ws, cfg = workspace(), settings()
 page_header(
-    "Compare in context.",
+    "Compare",
     "Keep a reference beside the cohort. Compare definitions and distributions without losing your place.",
     compact=True,
 )
 if ws.dataset is None:
-    st.info("Open a dataset in Understand, then select marks in Explore or define a cohort here.")
+    st.caption("Keep a reference beside a selected group. Start by opening a dataset.")
+    st.page_link("app_pages/understand.py", label="Open a dataset", icon=":material/table_chart:")
     st.stop()
 ds = ws.dataset
 if ws.replay:
@@ -29,6 +30,7 @@ if ws.replay:
         comparison_board(ws.comparisons[chosen], "recorded")
     else:
         st.info("This saved investigation has no comparison boards.")
+        st.page_link("app_pages/evidence.py", label="View saved evidence", icon=":material/bookmarks:")
     st.stop()
 model = get_model(ds)
 if st.session_state.pop("_hide_cohort_builder", False):
@@ -45,6 +47,7 @@ if change:
     cats = dimensions(ds)
     if not cats:
         st.info("No categorical predicate is available. Select points or distribution marks in Explore.")
+        st.page_link("app_pages/explore.py", label="Select a group in Explore", icon=":material/explore:")
     else:
         with st.container(horizontal=True, vertical_alignment="bottom"):
             field = st.selectbox("Cohort category", cats, format_func=ds.label, key="cohort_field")
@@ -98,7 +101,12 @@ if ws.selection is None:
     st.stop()
 selection = ws.selection
 st.caption(
-    f"ANCHORED REFERENCE {len(selection.base.row_ids):,} rows · SELECTED {len(selection.rows):,} rows · {len(selection.rows) - len(selection.selected_rows):,} rows added by entity closure"
+    f"Reference: {len(selection.base.row_ids):,} rows · Selected group: {len(selection.rows):,} rows"
+    + (
+        f" · {len(selection.rows) - len(selection.selected_rows):,} added to retain whole entities"
+        if len(selection.rows) != len(selection.selected_rows)
+        else " · Exact selected rows"
+    )
 )
 if not ws.comparison:
     st.caption(
@@ -183,10 +191,18 @@ with controls:
             except ValueError as exc:
                 st.error(str(exc))
 with toolbar:
-    if st.button("Begin filtered investigation", disabled=bool(ws.job_id), key="filter_cohort"):
+    if st.button(
+        "Begin filtered investigation",
+        disabled=bool(ws.job_id),
+        key="filter_cohort",
+        icon=":material/filter_alt:",
+        help="Make this group the working population. Return to reference restores the anchored investigation.",
+    ):
         ws.begin_filtered()
         st.switch_page("app_pages/discover.py")
-    if st.button("Clear cohort", disabled=bool(ws.job_id), key="clear_cohort"):
+    if st.button(
+        "Clear cohort", disabled=bool(ws.job_id), key="clear_cohort", type="tertiary", icon=":material/close:"
+    ):
         ws.selection, ws.comparison = None, None
         ws.cohort_revision += 1
         st.rerun()
@@ -220,3 +236,6 @@ if ws.comparison:
     st.caption(
         "Model review is optional: Terra reads matched companions and proposes eligible Python checks; Jev can prioritize them. No model is refitted. One review per investigation, with dataset permission."
     )
+    if cfg.available("terra") and not st.session_state.get("external_ok"):
+        st.caption("Allow external analysis for this dataset in Understand before requesting a Terra review.")
+        st.page_link("app_pages/understand.py", label="Review dataset permission", icon=":material/tune:")

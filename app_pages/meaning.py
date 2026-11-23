@@ -25,10 +25,11 @@ from firstlook.ui.runtime import settings, start_semantic_review, workspace
 
 ws = workspace()
 page_header(
-    "Meaning makes the difference.", "Define the analytical unit. Let every view, check and model reuse it."
+    "Meaning", "Define a quantity once. Reuse its grain, units and denominators throughout the investigation."
 )
 if ws.dataset is None:
-    st.info("Open a dataset in Understand first.")
+    st.caption("Open a table before defining its analytical meaning.")
+    st.page_link("app_pages/understand.py", label="Open a dataset", icon=":material/table_chart:")
     st.stop()
 if ws.replay:
     st.info(
@@ -46,107 +47,116 @@ def saved(message):
     st.rerun()
 
 
-summary = st.grid(4, min_column_width=160)
-summary.metric("Open decisions", len(model.clarifications))
-summary.metric("Reusable metrics", len(model.metrics))
-summary.metric("Entity definitions", len(model.entities))
-summary.metric("Observed relationships", len(model.relationships))
 st.caption(
-    "Exact structural evidence is automatic. Business meanings are proposals until you confirm them. Each definition is scoped to this table."
+    f"{len(model.clarifications)} open decisions · {len(model.metrics)} reusable metrics · "
+    f"{len(model.entities)} entity definitions · {len(model.relationships)} observed relationships"
 )
 decisions_tab, metrics_tab, structure_tab, contract_tab = st.tabs(
     ["Decisions", "Metrics", "Structure & time", "Contract"]
 )
 
 with decisions_tab:
-    st.subheader("Resolve the decisions that unlock work.")
-    st.caption(
-        "Start with the quantity you care about. Descriptive exploration remains available while other decisions are open."
-    )
-    for question in model.clarifications[:4]:
-        with st.container(border=True):
+    questions_panel, quantity_panel = st.columns([1, 1.7], gap="medium")
+    with questions_panel:
+        st.subheader("Decisions to resolve")
+        st.caption(
+            "Business meanings need your confirmation. Descriptive exploration remains available while decisions are open."
+        )
+        if model.clarifications:
+            selected_question = st.selectbox(
+                "Open decision",
+                [q.id for q in model.clarifications],
+                format_func=lambda value: next(q.question for q in model.clarifications if q.id == value),
+                key="meaning_question",
+            )
+            question = next(q for q in model.clarifications if q.id == selected_question)
             st.markdown("**" + question.question + "**")
             st.caption(question.reason)
             if question.suggested:
                 st.badge("Proposal: " + question.suggested, icon=":material/lightbulb:")
             if question.affected_metrics:
                 st.caption(
-                    f"{len(question.affected_metrics)} proposed metric definitions depend on this decision."
+                    f"{len(question.affected_metrics)} metric definitions depend on this decision. Review their value grain in Metrics."
                 )
-    if not model.clarifications:
-        st.success(
-            "The current clarification queue is resolved. Definitions remain inspectable and editable."
-        )
-    st.subheader("Quantity meaning")
-    nums = measures(ds)
-    if nums:
-        fid = st.selectbox("Quantity", nums, format_func=ds.label, key="meaning_field")
-        meaning = model.meaning(fid)
-        kinds = [
-            "unknown",
-            "amount",
-            "flow",
-            "count",
-            "state",
-            "rate",
-            "ratio",
-            "cumulative",
-            "temperature",
-            "circular",
-            "coordinate",
-            "index",
-            "composition",
-        ]
-        with st.form("quantity_definition_" + fid):
-            cols = st.columns(2)
-            kind = cols[0].selectbox(
-                "What kind of quantity?",
-                kinds,
-                index=kinds.index(meaning.kind),
-                help="Flow: events/amounts accrued. State: a level observed at an instant. Cumulative: a running counter. Rate/ratio: require an explicit denominator or weighting.",
+            st.caption(
+                "Use Quantity meaning for measurement kind and units; Metrics for totals and denominators; Structure & time for entities and recording schedules."
             )
-            unit = cols[1].text_input(
-                "Known measurement unit",
-                meaning.unit,
-                max_chars=80,
-                help="Enter a known unit, e.g. kWh, degC, kg. Do not infer one from the magnitude.",
+        else:
+            st.success("The current decision queue is resolved. Definitions remain editable.")
+        st.page_link("app_pages/explore.py", label="Continue exploring", icon=":material/explore:")
+    with quantity_panel:
+        st.subheader("Quantity meaning")
+        nums = measures(ds)
+        if nums:
+            fid = st.selectbox("Quantity", nums, format_func=ds.label, key="meaning_field")
+            meaning = model.meaning(fid)
+            kinds = [
+                "unknown",
+                "amount",
+                "flow",
+                "count",
+                "state",
+                "rate",
+                "ratio",
+                "cumulative",
+                "temperature",
+                "circular",
+                "coordinate",
+                "index",
+                "composition",
+            ]
+            with st.form("quantity_definition_" + fid):
+                cols = st.columns(2)
+                kind = cols[0].selectbox(
+                    "What kind of quantity?",
+                    kinds,
+                    index=kinds.index(meaning.kind),
+                    help="Flow: events/amounts accrued. State: a level observed at an instant. Cumulative: a running counter. Rate/ratio: require an explicit denominator or weighting.",
+                )
+                unit = cols[1].text_input(
+                    "Known measurement unit",
+                    meaning.unit,
+                    max_chars=80,
+                    help="Enter a known unit, e.g. kWh, degC, kg. Do not infer one from the magnitude.",
+                )
+                currency = cols[0].text_input("Currency, if applicable", meaning.currency, max_chars=12)
+                basis = cols[1].text_input(
+                    "Reference / price / conversion basis", meaning.basis, max_chars=200
+                )
+                transforms = st.multiselect(
+                    "Permitted display transformations",
+                    ["identity", "log", "sqrt", "zscore", "difference", "percent_change"],
+                    default=meaning.allowed_transforms,
+                    help="Applied after aggregation. Domain and unit checks still apply; permitting a transform does not make every value valid.",
+                )
+                available = st.checkbox(
+                    "Available at prediction time",
+                    value=meaning.available_at_prediction,
+                    help="Clear for post-outcome values or information unavailable when a prediction would be made.",
+                )
+                if st.form_submit_button("Confirm quantity meaning", icon=":material/check:"):
+                    try:
+                        candidate = model.model_copy(deep=True)
+                        m = FieldMeaning.model_validate(
+                            {
+                                **candidate.meaning(fid).model_dump(mode="json"),
+                                "kind": kind,
+                                "unit": unit.strip(),
+                                "currency": currency.strip(),
+                                "basis": basis.strip(),
+                                "confirmed": True,
+                                "allowed_transforms": list(dict.fromkeys(["identity"] + transforms)),
+                                "available_at_prediction": available,
+                            }
+                        )
+                        candidate.meanings = [m if old.field == fid else old for old in candidate.meanings]
+                        commit_model(ds, candidate, fid, "quantity", m.model_dump(mode="json"))
+                        saved("Quantity meaning confirmed.")
+                    except ValueError as exc:
+                        st.error(str(exc))
+            st.caption(
+                "A confirmed quantity does not establish its value grain. Confirm each total or weighted definition in Metrics."
             )
-            currency = cols[0].text_input("Currency, if applicable", meaning.currency, max_chars=12)
-            basis = cols[1].text_input("Reference / price / conversion basis", meaning.basis, max_chars=200)
-            transforms = st.multiselect(
-                "Permitted display transformations",
-                ["identity", "log", "sqrt", "zscore", "difference", "percent_change"],
-                default=meaning.allowed_transforms,
-                help="Applied after aggregation. Domain and unit checks still apply; permitting a transform does not make every value valid.",
-            )
-            available = st.checkbox(
-                "Available at prediction time",
-                value=meaning.available_at_prediction,
-                help="Clear for post-outcome values or information unavailable when a prediction would be made.",
-            )
-            if st.form_submit_button("Confirm quantity meaning", icon=":material/check:"):
-                try:
-                    candidate = model.model_copy(deep=True)
-                    m = FieldMeaning.model_validate(
-                        {
-                            **candidate.meaning(fid).model_dump(mode="json"),
-                            "kind": kind,
-                            "unit": unit.strip(),
-                            "currency": currency.strip(),
-                            "basis": basis.strip(),
-                            "confirmed": True,
-                            "allowed_transforms": list(dict.fromkeys(["identity"] + transforms)),
-                            "available_at_prediction": available,
-                        }
-                    )
-                    candidate.meanings = [m if old.field == fid else old for old in candidate.meanings]
-                    commit_model(ds, candidate, fid, "quantity", m.model_dump(mode="json"))
-                    saved("Quantity meaning confirmed.")
-                except ValueError as exc:
-                    st.error(str(exc))
-        st.caption(
-            "A confirmed quantity does not establish its value grain. Confirm each total or weighted definition in Metrics."
-        )
     if ws.semantic_review.get("metadata_proposals"):
         st.subheader("Terra’s semantic hypotheses")
         st.caption(
@@ -405,7 +415,7 @@ with metrics_tab:
     for message in readiness.reasons + readiness.requirements:
         st.warning(message)
     if st.button(
-        "Compute and add to Discover",
+        "Compute and inspect metric",
         type="primary",
         icon=":material/query_stats:",
         disabled=readiness.status != "allowed" or bool(ws.job_id),
@@ -423,7 +433,7 @@ with metrics_tab:
             inv.challenges += [challenge(ds, inv, finding, op) for op in eligible(ds, inv, finding)]
             ws.investigation = inv
             ws.inspect_id = finding.id
-            st.switch_page("app_pages/discover.py")
+            st.switch_page("app_pages/inspect.py")
         except ValueError as exc:
             st.error(str(exc))
     if readiness.warnings:

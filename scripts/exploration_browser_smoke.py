@@ -1,5 +1,6 @@
 """Actual native comparison layout and interactions, using DOM measurements only."""
 
+import argparse
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,9 @@ from playwright.sync_api import expect, sync_playwright
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--url", default="http://127.0.0.1:8765")
+    args = parser.parse_args()
     cache = Path("/workspace/.cache/ms-playwright")
     if cache.exists():
         os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(cache))
@@ -17,7 +21,7 @@ def main():
         page = browser.new_page(viewport={"width": 1440, "height": 900}, accept_downloads=True)
         page.on("pageerror", lambda e: errors.append(str(e)))
         page.on("console", lambda m: warnings.append(m.text) if m.type in {"error", "warning"} else None)
-        page.goto("http://127.0.0.1:8765")
+        page.goto(args.url)
         page.get_by_role("button", name="Explore semantic example", exact=True).click(timeout=45000)
         page.get_by_role("button", name="Investigate this dataset", exact=True).click(timeout=30000)
         page.get_by_role("button", name="Inspect this perspective", exact=True).wait_for(timeout=45000)
@@ -28,7 +32,7 @@ def main():
         page.get_by_role("button", name="Preview cohort", exact=True).click()
         page.get_by_role("button", name="Compare populations", exact=True).click(timeout=15000)
         expect(page.locator('[data-testid="stEChartsChart"]')).to_have_count(2, timeout=30000)
-        page.get_by_role("heading", name="Compare in context.", exact=True).scroll_into_view_if_needed()
+        page.get_by_role("heading", name="Compare", exact=True).scroll_into_view_if_needed()
         charts = page.locator('[data-testid="stEChartsChart"]')
         boxes = [chart.bounding_box() for chart in charts.all()]
         assert all(box is not None for box in boxes)
@@ -46,6 +50,9 @@ def main():
         page.get_by_role("button", name="Save comparison to Evidence", exact=True).click()
         checks["save_board"] = True
         page.get_by_role("link", name="Evidence", exact=True).click()
+        page.get_by_role("button", name="Comparisons", exact=True).click()
+        expect(page.get_by_role("combobox", name="Comparison board", exact=True)).to_be_visible()
+        expect(page.locator('[data-testid="stEChartsChart"]')).to_have_count(2)
         page.get_by_role("button", name="Prepare downloads", exact=True).click()
         with page.expect_download() as pending:
             page.get_by_role("button", name="Download investigation", exact=True).click()
@@ -58,7 +65,7 @@ def main():
         layouts = []
         for width in [1440, 1024, 390]:
             page.set_viewport_size({"width": width, "height": 1000})
-            page.get_by_role("heading", name="Compare in context.", exact=True).scroll_into_view_if_needed()
+            page.get_by_role("heading", name="Compare", exact=True).scroll_into_view_if_needed()
             actual = [c.bounding_box() for c in page.locator('[data-testid="stEChartsChart"]').all()]
             assert len(actual) == 2
             assert all(b and b["x"] >= -1 and b["x"] + b["width"] <= width + 1 for b in actual), (

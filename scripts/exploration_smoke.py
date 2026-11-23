@@ -1,5 +1,6 @@
 """Exercise new exploration and cohort transitions on the real agent API; no paid calls."""
 
+import argparse
 import json
 import time
 from pathlib import Path
@@ -9,7 +10,10 @@ from scripts.runtime_smoke import walk
 
 
 def main():
-    client = httpx.Client(base_url="http://127.0.0.1:8765", timeout=45)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--url", default="http://127.0.0.1:8765")
+    args = parser.parse_args()
+    client = httpx.Client(base_url=args.url, timeout=45)
     client.get("/_stcore/agent/openapi.json").raise_for_status()
     state = {}
 
@@ -48,8 +52,11 @@ def main():
     click(next(a["key"] for a in state["actions"] if a.get("label") == "Run local investigation"))
     wait_for(lambda: any(n["type"] == "echarts_chart" for n in walk(state["tree"])))
     interact(page="explore")
-    assert "Which perspectives" in text() and "Outside budget" in text()
+    assert any(a["key"] == "coverage_detail" for a in state["actions"])
+    assert any(n["type"] == "dataframe" for n in walk(state["tree"]))
     interact(widget_state={"exploration_lens": "Relationships"})
+    if any(a["key"] == "perspective_setup_Relationships" for a in state["actions"]):
+        interact(widget_state={"perspective_setup_Relationships": True})
     click("open_perspective")
     wait_for(lambda: sum(n["type"] == "echarts_chart" for n in walk(state["tree"])) >= 2)
     assert "middle half" in text() and "displayed marks" in text()
@@ -57,7 +64,7 @@ def main():
     interact(widget_state={"cohort_field": "category"})
     interact(widget_state={"cohort_levels_f004": ["Furniture"]})
     click("preview_cohort")
-    assert "ANCHORED REFERENCE" in text() and "SELECTED" in text()
+    assert "Reference:" in text() and "Selected group:" in text()
     builder = next(n for n in walk(state["tree"]) if n.get("key") == "cohort_builder")
     assert builder["value"] is False
     interact(widget_state={"compare_measure": "sales"})
@@ -66,7 +73,9 @@ def main():
     assert "Reference" in text() and "quantile" in text()
     click("save_comparison")
     interact(page="evidence")
-    assert "Preserved comparisons" in text()
+    interact(widget_state={"evidence_view": "Comparisons"})
+    assert any(a["key"] == "evidence_comparison" for a in state["actions"])
+    assert sum(n["type"] == "echarts_chart" for n in walk(state["tree"])) == 2
     click("prepare_export")
     assert len([n for n in walk(state["tree"]) if n["type"] == "download_button"]) == 2
     interact(page="compare")
@@ -75,7 +84,10 @@ def main():
     click("global_reset")
     assert any(n["type"] == "echarts_chart" for n in walk(state["tree"]))
     interact(page="models")
-    assert "Choose a target" in text()
+    assert all(
+        any(n.get("key") == key for n in walk(state["tree"]))
+        for key in ("model_target", "model_split", "model_hosted")
+    )
     report = {
         "perspective_coverage": True,
         "conditional_companions": True,

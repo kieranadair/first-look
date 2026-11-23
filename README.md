@@ -41,6 +41,7 @@ Connected mode runs one visible suggested model protocol, Jev’s constrained vi
 
 - [Deploy to Streamlit Community Cloud](deployment/README.md) — runtime files, owner secrets and usage caps.
 - [Development and validation](docs/development/README.md) — tests, evaluation tools and recorded measurements.
+- [Interface refinement and design rationale](docs/development/ui-uplift.md).
 - [Exploration uplift: implementation and validation](docs/development/exploration-uplift.md) and [Few Part II research synthesis](docs/research/few-part-ii-review.md).
 - [Executable semantic contract: research, patterns and limits](docs/research/semantic-contract.md).
 - [Research evidence](docs/research/evidence.md) and [Terra integration](docs/research/terra-integration.md).

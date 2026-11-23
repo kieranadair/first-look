@@ -33,6 +33,8 @@ terra_visual_review = true
 
 Environment variables override provider secrets: `TYPESAFE_API_KEY`, `TYPESAFE_MODEL`, `TABPFN_TOKEN`, `TABPFN_MODEL_PATH`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT`. `FIRSTLOOK_PROVIDER_MODE=offline` disables every provider even if keys exist. `auto` and `live` make configured integrations available; execution still requires an explicit action and the dataset’s **Allow external analysis** choice. There are no visitor API-key widgets or mutable per-visitor provider credentials.
 
+In the app, open **Understand → Investigation settings → Allow external analysis for this dataset**. To request a connected pass after the local overview, use **Findings → Investigation options → Investigate with connected models**. The sidebar reports configured credentials; it does not establish successful authentication. Models provides the separate hosted TabPFN evaluation controls.
+
 | Component | Receives | Responsibility |
 | --- | --- | --- |
 | Local Python | Source table and user corrections | Profiles, eligibility, statistics, splits, metrics, chart contracts and checks |

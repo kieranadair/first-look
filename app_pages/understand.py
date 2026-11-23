@@ -1,3 +1,5 @@
+"""A quick first pass, with field evidence beside the meanings it informs."""
+
 import hashlib
 
 import streamlit as st
@@ -8,14 +10,22 @@ from firstlook.examples import CATALOG, load_example
 from firstlook.ingest import InputError, load_table
 from firstlook.modeling import eligible_targets
 from firstlook.profiling import profile
+from firstlook.semantic.model import get_model
 from firstlook.semantics import apply_semantics, semantic_table
 from firstlook.ui.components import chart_view, page_header
 from firstlook.ui.runtime import manager, start_analysis, start_semantic_review, settings, workspace
 
 ws = workspace()
-page_header("A clearer first look.", "Understand what you have. Find what deserves a second look.")
+page_header(
+    "Understand" if ws.dataset else "A clearer first look.",
+    "Review your table, then start a local investigation. Refine its business meaning as you explore."
+    if ws.dataset
+    else "Explore a table. Question the patterns. Keep the evidence.",
+    compact=ws.dataset is not None,
+)
 
-with st.container(border=True):
+
+def open_dataset():
     uploaded = st.file_uploader(
         "Open your dataset",
         type=["csv", "parquet"],
@@ -44,13 +54,7 @@ with st.container(border=True):
             or digest(parser) != digest(ws.dataset.record.parser)
         ):
             try:
-                ds = load_table(
-                    raw,
-                    uploaded.name,
-                    delimiter,
-                    encoding,
-                    [""] + [v.strip() for v in missing.split(",") if v.strip()],
-                )
+                ds = load_table(raw, uploaded.name, delimiter, encoding, parser["missing_tokens"])
                 if ws.job_id:
                     manager().cancel(ws.owner, ws.job_id)
                 ws.load(ds)
@@ -59,134 +63,212 @@ with st.container(border=True):
             except (InputError, ValueError) as exc:
                 st.error(str(exc))
 
+
 if ws.dataset is None:
-    st.space("small")
-    st.subheader("Start with a question, not a blank page.")
-    st.caption("These small datasets make the workflow tangible. Every calculation runs on the actual data.")
-    grid = st.grid(3, min_column_width=260, gap="small")
+    with st.container(horizontal=True, gap="small"):
+        st.badge("1 · Open a table", color="blue")
+        st.badge("2 · Explore and challenge", color="gray")
+        st.badge("3 · Preserve the evidence", color="gray")
+    opening = st.grid(2, min_column_width=310, gap="small")
+    with opening.cell():
+        with st.container(border=True, height="stretch"):
+            st.subheader("Bring your own question")
+            st.caption("CSV or Parquet · local analysis works without keys.")
+            open_dataset()
+    with opening.cell():
+        with st.container(border=True, height="stretch"):
+            st.caption("Guided example · analytical meaning")
+            st.subheader("Orders aren’t rows.")
+            st.markdown(
+                "Explore sales, repeated order totals and time gaps. See why definitions change the question you can answer."
+            )
+            st.space("stretch")
+            if st.button(
+                "Explore semantic example",
+                key="example_semantic",
+                type="primary",
+                icon=":material/arrow_forward:",
+                width="stretch",
+            ):
+                ws.load(load_example("semantic"))
+                st.session_state.external_ok = False
+                st.rerun()
+    st.subheader("Or follow a different thread")
+    grid = st.grid(3, min_column_width=220, gap="small")
     for key in ["reversal", "penguins", "nonlinear"]:
         title, description, icon = CATALOG[key]
         with grid.cell():
             with st.container(border=True, height="stretch"):
-                st.markdown(f":material/{icon}:")
-                st.subheader(title)
-                st.markdown(description)
+                st.markdown(f"**:material/{icon}: {title}**")
+                st.caption(description)
                 st.space("stretch")
                 if st.button("Explore example", key="example_" + key, width="stretch"):
                     ws.load(load_example(key))
                     st.session_state.external_ok = False
                     st.rerun()
-    with st.container(border=True):
-        st.badge("NEW · EXECUTABLE MEANING", icon=":material/schema:")
-        st.subheader("Orders aren’t rows.")
-        st.markdown(
-            "One table can support several valid questions. Explore order averages, allocated totals, weighted prices and time gaps with their definitions already declared by the generator."
-        )
-        if st.button("Explore semantic example", key="example_semantic", icon=":material/arrow_forward:"):
-            ws.load(load_example("semantic"))
-            st.session_state.external_ok = False
-            st.rerun()
-    with st.expander("More examples"):
+    with st.popover("More examples", icon=":material/more_horiz:"):
         for key in ["bike", "null"]:
             if st.button(CATALOG[key][0], key="example_" + key, icon=f":material/{CATALOG[key][2]}:"):
                 ws.load(load_example(key))
                 st.session_state.external_ok = False
                 st.rerun()
-    st.space("medium")
-    for cell, (title, body) in zip(
-        st.columns(3),
-        [
-            ("Find", "A focused set of questions, grounded in your table."),
-            ("Challenge", "Check groups, extremes and the summaries behind the picture."),
-            ("Preserve", "Take the calculations, assumptions and evidence with you."),
-        ],
-    ):
-        cell.markdown("**" + title + "**")
-        cell.caption(body)
+    st.caption(
+        "Python computes and validates the evidence. Connected models are optional, and only run when requested with dataset permission."
+    )
     st.stop()
 
 ds = ws.dataset
 if ws.replay:
     st.info(
-        "This is recorded evidence. Open Discover or Evidence to inspect it. Upload a new dataset to begin a fresh investigation."
+        "This is recorded evidence. Open Findings or Evidence to inspect it, or change datasets to begin again."
     )
+    st.page_link("app_pages/evidence.py", label="Open recorded evidence", icon=":material/bookmarks:")
+    with st.popover("Change dataset", icon=":material/upload_file:"):
+        open_dataset()
     st.stop()
 p = ws.profile
-grid = st.grid(4, min_column_width=170)
+semantic_model = get_model(ds)
+# Reserve the action row before rendering settings, then handle it after their state is current.
+actions = st.container(horizontal=True, vertical_alignment="center", gap="small")
+with actions:
+    investigate = st.button(
+        "Investigate this dataset", type="primary", icon=":material/query_stats:", disabled=bool(ws.job_id)
+    )
+    with st.popover("Investigation settings", icon=":material/tune:"):
+        targets = eligible_targets(ds)
+        focus = st.selectbox(
+            "Focus field",
+            [None] + targets,
+            format_func=lambda f: "Explore broadly" if f is None else ds.label(f),
+            key="focus_" + ds.record.fingerprint,
+            persist_state="session",
+        )
+        if focus != ws.focus:
+            ws.focus = focus
+            ws.invalidate()
+        assumption = st.selectbox(
+            "Sampling assumption",
+            ["unknown", "exchangeable"],
+            format_func=lambda v: (
+                "Unknown — keep resampling checks off"
+                if v == "unknown"
+                else "Rows are exchangeable — enable diagnostic row resampling"
+            ),
+            key="assumption_" + ds.record.fingerprint,
+            persist_state="session",
+        )
+        if assumption != ws.assumption:
+            ws.assumption = assumption
+            ws.invalidate()
+        st.checkbox(
+            "Allow external analysis for this dataset",
+            key="external_ok",
+            persist_state="session",
+            help="Jev receives metadata and computed summaries. Terra receives field summaries, bounded plotted values and chart images. TabPFN receives the permitted training/test values. Nothing is sent until you request connected work.",
+        )
+        st.caption(
+            "This page starts a local investigation. Request connected work explicitly in Findings or Models; it uses the owner's configured providers."
+        )
+    with st.popover("Change dataset", icon=":material/upload_file:"):
+        st.caption(
+            "Opening another table starts a new working investigation. Export important evidence first."
+        )
+        open_dataset()
+if investigate:
+    try:
+        start_analysis(ws)
+        st.switch_page("app_pages/explore.py")
+    except ValueError as exc:
+        st.error(str(exc))
+st.caption(
+    ("Focus: " + ds.label(ws.focus) if ws.focus else "Broad exploration")
+    + " · Local investigation · External analysis "
+    + ("permitted when requested" if st.session_state.get("external_ok") else "off")
+)
+grid = st.grid(4, min_column_width=130, gap="small")
 grid.metric("Recorded rows", f"{p['rows']:,}")
 grid.metric("Fields", p["columns"])
 grid.metric("Missing cells", f"{p['missing'] / max(p['cells'], 1):.1%}")
 grid.metric("Duplicate rows", f"{p['duplicates']:,}")
-st.caption(ds.record.source)
-with st.container(border=True):
-    from firstlook.semantic.model import get_model
 
-    semantic_model = get_model(ds)
-    st.markdown("**Go beyond field types.**")
+with st.container(horizontal=True, vertical_alignment="center", gap="small"):
     st.caption(
-        f"{len(semantic_model.clarifications)} focused decisions · {len(semantic_model.metrics)} metric definitions · {len(semantic_model.relationships)} observed relationships. Define grain, quantities, denominators and time policies once."
+        "**One row represents:** "
+        + (ds.record.description or "Not yet described. Add collection context when you know it.")
     )
-    st.page_link("app_pages/meaning.py", label="Review analytical meaning", icon=":material/schema:")
-with st.container(border=True):
-    st.markdown("**What does one row represent?**")
-    st.caption(
-        "Add collection context and known limitations. You can explore now and refine business definitions in Meaning."
-    )
-    with st.form("dataset_context_form"):
-        description = st.text_area(
-            "Dataset context",
-            value=ds.record.description,
-            max_chars=2000,
-            help="Describe what one row means, when it was collected, and any limits on interpretation.",
-        )
-        if st.form_submit_button("Apply dataset context") and description != ds.record.description:
-            ds.record.description = description
-            ws.invalidate()
-            st.rerun()
-
-st.subheader("Give the fields their meaning.")
-st.caption(
-    "These roles are proposals. Correct identifiers, category order and units before interpreting an analysis."
-)
-with st.form("semantics_form"):
-    edited = st.data_editor(
-        semantic_table(ds),
-        hide_index=True,
-        key="semantics_" + ws.context().semantics,
-        disabled=["field", "name"],
-        num_rows="fixed",
-        column_config={
-            "field": None,
-            "name": st.column_config.TextColumn("Field"),
-            "role": st.column_config.SelectboxColumn(
-                "Analytical role", options=[r.value for r in Role], required=True
-            ),
-            "unit": st.column_config.TextColumn("Unit"),
-            "order": st.column_config.TextColumn("Order", help="For ordinal fields, separate levels with |"),
-            "exclude": st.column_config.CheckboxColumn("Exclude"),
-            "confirmed": st.column_config.CheckboxColumn("Confirmed"),
-        },
-        alt="Editable analytical roles and units for source fields",
-    )
-    if st.form_submit_button("Apply field meanings", icon=":material/check:"):
-        try:
-            changed = apply_semantics(ds, edited)
-            if changed:
+    with st.popover("Edit context", icon=":material/edit_note:"):
+        with st.form("dataset_context_form", border=False):
+            description = st.text_area(
+                "Dataset context",
+                value=ds.record.description,
+                max_chars=2000,
+                help="Describe what one row means, when it was collected, and any limits on interpretation.",
+            )
+            if st.form_submit_button("Apply dataset context") and description != ds.record.description:
+                ds.record.description = description
                 ws.invalidate()
-                ws.profile = profile(ds)
-                st.toast(f"Updated {len(changed)} fields. Dependent analyses will be recomputed.")
                 st.rerun()
-            else:
-                st.caption("No field meanings changed.")
-        except ValueError as exc:
-            st.error(str(exc))
 
-with st.expander("Inspect a field"):
-    fid = st.selectbox("Field", [f.id for f in ds.record.fields], format_func=ds.label, key="profile_field")
+st.subheader("Review the fields against their evidence")
+st.caption(
+    "Correct roles and units on the left; inspect recorded values on the right. Proposed roles remain unconfirmed until you apply them."
+)
+roles, evidence = st.columns([1.35, 1], gap="medium")
+with roles:
+    with st.form("semantics_form", border=False):
+        edited = st.data_editor(
+            semantic_table(ds),
+            hide_index=True,
+            key="semantics_" + ws.context().semantics,
+            disabled=["field", "name"],
+            num_rows="fixed",
+            height=320,
+            column_order=["name", "role", "unit", "confirmed", "exclude", "order"],
+            column_config={
+                "field": None,
+                "name": st.column_config.TextColumn("Field"),
+                "role": st.column_config.SelectboxColumn(
+                    "Analytical role", options=[r.value for r in Role], required=True
+                ),
+                "unit": st.column_config.TextColumn("Unit"),
+                "order": st.column_config.TextColumn(
+                    "Order", help="For ordinal fields, separate levels with |"
+                ),
+                "exclude": st.column_config.CheckboxColumn("Exclude"),
+                "confirmed": st.column_config.CheckboxColumn("Confirmed"),
+            },
+            alt="Editable analytical roles and units for source fields",
+        )
+        if st.form_submit_button("Apply field meanings", icon=":material/check:"):
+            try:
+                changed = apply_semantics(ds, edited)
+                if changed:
+                    ws.invalidate()
+                    ws.profile = profile(ds)
+                    st.toast(f"Updated {len(changed)} fields. Dependent analyses will be recomputed.")
+                    st.rerun()
+                else:
+                    st.caption("No field meanings changed.")
+            except ValueError as exc:
+                st.error(str(exc))
+    st.caption(
+        "Use the table's column controls or horizontal scroll for confirmation, exclusions and category order."
+    )
+with evidence:
+    field_ids = [f.id for f in ds.record.fields]
+    default_field = next((f.id for f in ds.record.fields if f.role == Role.MEASURE), field_ids[0])
+    fid = st.selectbox(
+        "Inspect a field",
+        field_ids,
+        index=field_ids.index(default_field),
+        format_func=ds.label,
+        key="profile_field",
+    )
     f = ds.field(fid)
-    st.caption(f.evidence)
     field_profile = p["fields"][fid]
-    st.json(field_profile, expanded=False)
+    st.caption(
+        f"{field_profile['distinct']:,} distinct · {field_profile['count']:,} recorded · {field_profile['missing']:,} missing"
+    )
     try:
         op = "frequency"
         if f.role == Role.MEASURE:
@@ -195,46 +277,25 @@ with st.expander("Inspect a field"):
             )
             op = "ecdf" if shape == "Cumulative" else "distribution"
         result, finding = analyze(ds, ws.context(), plan_for(ws.context(), op, [fid], "Inspect " + f.name))
-        chart_view(finding.chart, result, "field_inspector", height=260)
+        chart_view(finding.chart, result, "field_inspector", height=240)
     except ValueError:
         st.dataframe(
             ds.frame[[fid]].head(50).rename(columns={fid: f.name}),
             hide_index=True,
+            height=240,
             alt="First recorded values for the selected field",
         )
+    st.caption(f.evidence)
+    with st.expander("Detailed field profile"):
+        st.json(field_profile, expanded=False)
 
-st.subheader("Set the direction.")
-targets = eligible_targets(ds)
-focus = st.selectbox(
-    "Focus field",
-    [None] + targets,
-    format_func=lambda f: "Explore broadly" if f is None else ds.label(f),
-    key="focus_" + ds.record.fingerprint,
-    persist_state="session",
-)
-if focus != ws.focus:
-    ws.focus = focus
-    ws.invalidate()
-assumption = st.selectbox(
-    "Sampling assumption",
-    ["unknown", "exchangeable"],
-    format_func=lambda v: (
-        "Unknown — keep resampling checks off"
-        if v == "unknown"
-        else "Rows are exchangeable — enable diagnostic row resampling"
-    ),
-    key="assumption_" + ds.record.fingerprint,
-    persist_state="session",
-)
-if assumption != ws.assumption:
-    ws.assumption = assumption
-    ws.invalidate()
-st.checkbox(
-    "Allow external analysis for this dataset",
-    key="external_ok",
-    persist_state="session",
-    help="Jev receives metadata and computed summaries. Terra receives field summaries, bounded plotted values and chart images. TabPFN receives the permitted training/test values. Nothing is sent until you request connected work.",
-)
+with st.container(border=True):
+    st.markdown("**Ready to ask business questions?**")
+    st.caption(
+        f"{len(semantic_model.clarifications)} open decisions · {len(semantic_model.metrics)} metric definitions · {len(semantic_model.relationships)} observed relationships. Meaning defines what can be totalled, averaged or compared."
+    )
+    st.page_link("app_pages/meaning.py", label="Review analytical meaning", icon=":material/schema:")
+
 with st.expander("Optional second opinion on field meanings"):
     st.caption(
         "Terra can suggest roles and useful clarification questions from field summaries. Suggestions remain hypotheses until you choose and apply them. Units are preserved."
@@ -285,14 +346,5 @@ with st.expander("Optional second opinion on field meanings"):
                 st.rerun()
             except ValueError as exc:
                 st.error(str(exc))
-st.caption(
-    "Local investigation needs no keys. Hosted models use the owner’s configured providers; original data is never repaired automatically."
-)
-if st.button(
-    "Investigate this dataset", type="primary", icon=":material/query_stats:", disabled=bool(ws.job_id)
-):
-    try:
-        start_analysis(ws)
-        st.switch_page("app_pages/explore.py")
-    except ValueError as exc:
-        st.error(str(exc))
+
+st.caption(ds.record.source)

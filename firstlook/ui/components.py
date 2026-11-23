@@ -20,25 +20,38 @@ STATUS = {
 }
 
 
-def page_header(title: str, subtitle: str, compact: bool = False):
+def page_header(title: str, subtitle: str, compact: bool = True):
     if compact:
         st.header(title)
         st.caption(subtitle)
     else:
-        st.caption("FIRST LOOK  /  VISUAL INVESTIGATION")
+        st.caption("First Look · visual investigation")
         st.title(title)
         st.markdown(subtitle)
     ws = workspace()
     if ws.dataset:
-        context = f"{len(ws.context().row_ids):,} active rows" if len(ws.dataset.frame) else "Saved evidence"
-        st.caption(
-            f"{ws.dataset.record.name}  ·  {context}  ·  {ws.dataset.record.columns} fields"
-            + ("  ·  Recorded replay" if ws.replay else "")
+        filtered = ws.rows is not None and not ws.replay
+        context = (
+            (
+                f"{len(ws.context().row_ids):,} of {ws.dataset.record.rows:,} rows · filtered population"
+                if filtered
+                else f"{len(ws.context().row_ids):,} active rows"
+            )
+            if len(ws.dataset.frame)
+            else "Saved evidence"
         )
-        if ws.rows is not None and not ws.replay:
-            if st.button(
+        label = f"**{ws.dataset.record.name}** · {context} · {ws.dataset.record.columns} fields" + (
+            " · Recorded replay" if ws.replay else ""
+        )
+        if not filtered:
+            st.caption(label)
+        else:
+            row = st.container(horizontal=True, vertical_alignment="center", gap="small")
+            row.caption(label)
+            if row.button(
                 "Return to reference" if ws.return_state else "Reset selection",
                 icon=":material/filter_alt_off:",
+                type="tertiary",
                 key="global_reset",
             ):
                 if ws.return_state:
@@ -77,8 +90,7 @@ def chart_view(spec, result, key: str, selection: bool = False, height: int = 31
             st.caption(
                 f"{len(chosen):,} displayed source members selected. Preview a cohort to compare it while retaining this reference."
             )
-            left, right = st.columns(2)
-            with left:
+            with st.container(horizontal=True, gap="small"):
                 if st.button("Compare selected rows", key="compare_" + key, icon=":material/compare_arrows:"):
                     from firstlook.comparison import preview
 
@@ -98,7 +110,6 @@ def chart_view(spec, result, key: str, selection: bool = False, height: int = 31
                             scope=result.metadata.get("selection_semantics", "Displayed mark members only"),
                         )
                         st.switch_page("app_pages/compare.py")
-            with right:
                 if st.button("Apply selected rows", key="apply_" + key, icon=":material/filter_alt:"):
                     from firstlook.comparison import preview
 
@@ -128,21 +139,24 @@ def finding_card(finding: Finding, inv: Investigation, lead: bool = False):
     result = inv.results[finding.result_id]
     with st.container(border=True, height="stretch", key="card_" + finding.id):
         with st.container(horizontal=True, horizontal_alignment="distribute"):
-            st.caption(finding.family.replace("_", " ").upper())
+            st.caption(finding.family.replace("_", " ").capitalize())
             altered = any(c.parent_id == finding.id and c.status == "changed" for c in inv.challenges)
             if altered:
                 st.badge("Changes under scrutiny", color="orange", icon=":material/compare_arrows:")
             elif finding.claim_type == "model-derived":
                 st.badge("Held-out diagnostic", color="blue")
-        st.subheader(finding.title)
+        if lead:
+            st.subheader(finding.title)
+        else:
+            st.markdown("#### " + finding.title)
         st.markdown(finding.observation)
-        render_chart(finding, inv, height=360 if lead else 290)
+        render_chart(finding, inv, height=300 if lead else 280)
         st.caption(scope_caption(result))
         with st.container(horizontal=True, gap="xsmall"):
             if st.button("Inspect", key="inspect_" + finding.id, icon=":material/open_in_full:"):
                 ws.inspect_id = finding.id
                 ws.opened.add(finding.id)
-                st.rerun()
+                st.switch_page("app_pages/inspect.py")
             if st.button("Challenge", key="challenge_" + finding.id, icon=":material/compare_arrows:"):
                 ws.challenge_id = finding.id
                 st.switch_page("app_pages/challenge.py")
@@ -158,39 +172,48 @@ def finding_card(finding: Finding, inv: Investigation, lead: bool = False):
                 st.rerun()
 
 
-def evidence_inspector(finding: Finding, inv: Investigation):
+def evidence_inspector(finding: Finding, inv: Investigation, compact: bool = False):
     result = inv.results[finding.result_id]
-    st.caption("WHY THIS VIEW")
-    st.markdown(f"**Question:** {finding.title}")
-    st.caption("Statistics, chart and exported values share this result artifact.")
+    st.markdown("**Reading this evidence**")
+    st.caption(scope_caption(result))
+    if not compact:
+        st.markdown(f"**Question:** {finding.title}")
     if result.metadata.get("definition"):
-        with st.container(border=True):
+        with st.container(gap="xsmall"):
             st.markdown("**Analytical definition**")
             definition = result.metadata["definition"]
             st.caption(definition.get("description") or definition["aggregation"].replace("_", " "))
+            dataset = workspace().dataset
+            model = dataset.record.semantic_model if dataset else None
+            grain = "Declared entity" if definition.get("entity") else "Recorded rows"
+            if model:
+                grain = next(
+                    (entity.label for entity in model.entities if entity.id == definition.get("entity")),
+                    grain,
+                )
             st.caption(
-                "Value grain: "
-                + (definition.get("entity") or "recorded rows")
-                + " · denominator scope: "
-                + definition.get("denominator_scope", "active_population")
+                f"Value grain: {grain} · Denominator scope: "
+                + ("each group" if definition.get("denominator_scope") == "group" else "current population")
             )
-            st.caption(
-                "Transformation stage: after aggregation · contract " + result.metadata["semantic_revision"]
-            )
-            st.json(definition, expanded=False)
-    for rule in rule_details(finding.chart.rules):
-        st.caption(f"{rule['id']} · {rule['name']}. {rule['requirement']}")
-    with st.expander("Research behind these constraints"):
+            st.caption("Transformations apply after aggregation.")
+    for limitation in dict.fromkeys([*finding.limitations, *result.warnings]):
+        st.caption(limitation)
+    with st.expander("Chart safeguards and research"):
         for rule in rule_details(finding.chart.rules):
+            st.caption(rule["requirement"])
             st.markdown(f"[{rule['name']}]({rule['source']}) · {rule['evidence']}")
         st.caption(
             "These sources motivate conditional design patterns. They do not validate a universal chart selector or this app’s productivity."
         )
-    st.dataframe(
-        result.frame().drop(columns=["row_ids"], errors="ignore").head(200),
-        hide_index=True,
-        alt="Computed evidence behind the current finding",
-    )
+    values = st.expander("Exact computed values") if compact else st.container()
+    with values:
+        st.caption("Statistics, chart and exported values share this result. Showing up to 200 records.")
+        st.dataframe(
+            result.frame().drop(columns=["row_ids", "row_id"], errors="ignore").head(200),
+            hide_index=True,
+            height=230,
+            alt="Computed evidence behind the current finding",
+        )
     with st.expander("Contract and execution details"):
         st.json(
             {
@@ -202,15 +225,12 @@ def evidence_inspector(finding: Finding, inv: Investigation):
                 "semantic_metadata": result.metadata,
             }
         )
-    for limitation in finding.limitations:
-        st.caption(limitation)
 
 
 def workflow_note(step: str, purpose: str, action: str):
     """Short, visible orientation; never hides essential interpretation in an expander."""
-    with st.container(border=True):
-        st.caption(step.upper())
-        st.markdown(purpose)
+    with st.container(gap="xsmall"):
+        st.markdown(f"**{step} · {purpose}**")
         st.caption(action)
 
 
@@ -231,8 +251,9 @@ def comparison_board(bundle, key="comparison"):
         else "entity overlap not evaluated"
     )
     st.caption(
-        f"REFERENCE: {bundle.spec.reference.upper()} · DENOMINATORS: {bundle.spec.denominator.upper()} · SELECTION: {bundle.spec.selection.policy.upper()} · {bundle.spec.row_overlap:,} overlapping rows / {entity_note}"
+        f"Reference: {bundle.spec.reference.replace('_', ' ')} · Denominators: {bundle.spec.denominator.replace('_', ' ')} · Selection: {bundle.spec.selection.policy.replace('_', ' ')}"
     )
+    st.caption(f"{bundle.spec.row_overlap:,} overlapping rows · {entity_note}")
     cumulative = bundle.spec.operation == "ecdf"
     grid = st.grid(3 if cumulative else 2, min_column_width=260 if cumulative else 350, gap="small")
     for view in bundle.views:

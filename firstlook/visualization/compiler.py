@@ -132,8 +132,9 @@ def compile_chart(spec: ChartSpec, result: ResultArtifact, dark: bool = False) -
     options: dict[str, Any] = {
         "animationDuration": 250,
         "animationDurationUpdate": 250,
+        "textStyle": {"fontFamily": "Plex Sans, sans-serif", "fontSize": 12, "color": ink},
         "grid": {"left": 64, "right": 24, "top": 32, "bottom": 68, "containLabel": True},
-        "tooltip": {"trigger": "item"},
+        "tooltip": {"trigger": "item", "confine": True},
         "aria": {"enabled": True},
         "xAxis": {
             "type": "value",

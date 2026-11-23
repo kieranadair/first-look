@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="232" height="44" viewBox="0 0 232 44" role="img" aria-label="First Look">
+  <rect x="1" y="5" width="34" height="34" rx="7" fill="#3E62D6"/>
+  <path d="M8 29l6-9 6 5 8-13" fill="none" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="48" y="31" font-family="sans-serif" font-size="27" font-weight="600" fill="#E8EEF8">First Look</text>
+</svg>
