@@ -309,7 +309,7 @@ def inspect_bundle(blob: bytes, raw: bytes | None = None) -> dict:
             raise ValueError("The investigation contains too many kept observations.")
         for entry in records + ([payload["working"]] if payload.get("working") else []):
             _check_snapshot(entry, ds, verified)
-        if not isinstance(payload.get("provider_history"), list) or len(payload["provider_history"]) > 4:
+        if not isinstance(payload.get("provider_history"), list) or len(payload["provider_history"]) > 24:
             raise ValueError("Invalid recorded assistance history.")
         return {
             **payload,

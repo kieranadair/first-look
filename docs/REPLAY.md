@@ -5,7 +5,7 @@ In **Investigate**, deliberately keep a view that matters. In **Record**, add an
 Two downloads serve different needs:
 
 - **Readable Markdown:** the question, supplied context, chosen definitions, bounded table excerpts, limitations and human notes.
-- **Evidence ZIP:** complete recorded tables and definitions, optional provider/prediction records and optionally the exact original file. Its manifest and checksums detect changed bytes.
+- **Evidence ZIP:** complete recorded tables and definitions, the most recent twenty-four model-review records and the predictive record when one has been run and optionally the exact original file. Its manifest and checksums detect changed bytes.
 
 A bundle contains `investigation.json`, `record.md`, `manifest.json`, `checksums.json` and optionally `source.csv` or `source.parquet`. The format identifier is `first-look-v2-evidence-1`; no executable artifacts, pickle or arbitrary archive paths are accepted. Import is bounded to 35 MiB compressed and 100 MiB expanded.
 

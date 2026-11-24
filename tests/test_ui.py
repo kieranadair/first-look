@@ -1,11 +1,14 @@
 """Two complete native journeys, rather than a matrix of every widget permutation."""
 
 from copy import deepcopy
+from concurrent.futures import Future
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
 from firstlook.data import load_table
+from firstlook.analysis import compare
+from firstlook.types import Request
 from firstlook.session import Session
 
 APP = Path(__file__).resolve().parents[1] / "streamlit_app.py"
@@ -22,31 +25,65 @@ def own_data():
     return state
 
 
-def test_welcome_and_own_data_start_are_useful_without_paid_work(monkeypatch):
-    monkeypatch.setenv("FIRSTLOOK_PROVIDER_MODE", "offline")
+def controlled_reviews(monkeypatch):
+    calls = []
 
-    def forbidden(*args, **kwargs):
-        raise AssertionError("Upload and ordinary reruns must not call providers.")
+    def review(ds, result, packet, settings):
+        calls.append(deepcopy(packet))
+        return {
+            "status": "suggestion",
+            "interpretation": "A controlled review of the current evidence.",
+            "records": [{"provider": "Terra"}, {"provider": "Jev"}],
+            "suggestions": [],
+            "errors": [],
+        }
 
-    monkeypatch.setattr("firstlook.ui.assist_view", forbidden)
+    class Immediate:
+        def submit(self, fn, *args, **kwargs):
+            future = Future()
+            try:
+                future.set_result(fn(*args, **kwargs))
+            except Exception as exc:
+                future.set_exception(exc)
+            return future
+
+    monkeypatch.setattr("firstlook.ui.assist_view", review)
+    monkeypatch.setattr("firstlook.ui.executor", lambda: Immediate())
+    return calls
+
+
+def test_reviews_start_automatically_without_setup_and_reuse_unchanged_evidence(monkeypatch):
+    calls = controlled_reviews(monkeypatch)
     app = AppTest.from_file(str(APP), default_timeout=20).run()
-    assert not app.exception
-    assert app.title[0].value == "Hi, I’m First Look."
-    assert len(app.get("file_uploader")) == 1
-    assert not app.get("download_button")
+    assert not app.exception and app.title[0].value == "Hi, I’m First Look."
+    assert len(app.get("file_uploader")) == 1 and not calls
     app.session_state["investigation"] = own_data()
     app.run()
     assert not app.exception and app.title[0].value == "Your table is ready."
-    assert app.session_state["investigation"].current.summary["n"] == 4
-    app.switch_page("app_pages/investigate.py").run()
-    assert not app.exception
-    assert app.button(key="ask_assistance").disabled
-    assert not app.session_state["investigation"].assistance_requests
+    assert len(calls) == 1
+    app.run().switch_page("app_pages/investigate.py").run()
+    assert not app.exception and len(calls) == 1
+    assert app.session_state["investigation"].assistance["interpretation"]
     assert len(app.get("echarts_chart")) == 1
+    assert all(w.key not in {"consent", "use_hosted"} for w in app.checkbox)
+    assert all(w.key != "ask_assistance" for w in app.button)
+    state = app.session_state["investigation"]
+    first = deepcopy(state.last_request)
+    state.run(Request("categories", "f001"))
+    app.run().run()
+    assert len(calls) == 2
+    state = app.session_state["investigation"]
+    state.run(first)
+    app.run()
+    assert len(calls) == 2 and app.session_state["investigation"].assistance
+    state.comparison = compare(state.ds, first, [0, 1], state.meanings)
+    app.run().run()
+    assert len(calls) == 3 and calls[-1]["displayed_evidence"] == "comparison"
+    assert not app.exception
 
 
 def test_consequential_choice_then_immutable_record_and_readable_export(monkeypatch):
-    monkeypatch.setenv("FIRSTLOOK_PROVIDER_MODE", "offline")
+    controlled_reviews(monkeypatch)
     app = AppTest.from_file(str(APP), default_timeout=20)
     app.session_state["investigation"] = own_data()
     app.run().switch_page("app_pages/investigate.py").run()

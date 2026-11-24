@@ -4,7 +4,7 @@
 
 First Look is an open-source Python app for people who have a table they care about and some context about what it means. Upload your own CSV or Parquet file. Start with an immediate local view, explore related perspectives, check choices that could change an interpretation, and keep the evidence that matters.
 
-The distinctive contribution is a visible connection between **meaning → calculation → comparison → interpretation**. Python calculates; optional AI helps suggest and reason; you supply context and own the judgment. Important friction stays visible—whether a value can be added, whether rows represent repeated entities, or whether a missing day can mean zero. Routine configuration and arithmetic stay out of the way.
+The distinctive contribution is a visible connection between **meaning → calculation → comparison → interpretation**. Python calculates; Jev and Terra help suggest and reason; you supply context and own the judgment. Important friction stays visible—whether a value can be added, whether rows represent repeated entities, or whether a missing day can mean zero. Routine configuration and arithmetic stay out of the way.
 
 ## Start locally
 
@@ -17,14 +17,14 @@ pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
 
-No account or API keys are needed for local analysis. The opening begins **“Hi, I’m First Look.”** Bring your own familiar data; there is no demo gallery or compulsory metadata questionnaire.
+Visitors need no account, keys or provider setup. The app owner configures all three services once using server secrets; local development uses the same settings or controlled clients for tests. The opening begins **“Hi, I’m First Look.”** Bring your own familiar data; there is no demo gallery or compulsory metadata questionnaire.
 
 ## The investigation
 
 There are three destinations:
 
 1. **Data:** open your table, see what was read, optionally supply your question and context, and correct a field role if needed.
-2. **Investigate:** choose a useful perspective, inspect its definition and support, compare a selected population with a reference, and resolve consequential meaning beside the evidence. Optional connected assistance can suggest a next step. A predictive check is available when that would help your question.
+2. **Investigate:** choose a useful perspective, inspect its definition and support, compare a selected population with a reference, and resolve consequential meaning beside the evidence. Jev and Terra automatically review new analytical context and suggest useful next steps. A predictive check is available when that would help your question.
 3. **Record:** keep chosen views with their original definitions, add your interpretation or next question, and download a readable record and checksummed evidence.
 
 **Define → plan → execute → reflect** is an iterative rhythm, not a wizard. Stephen Few's visual sensemaking perspectives inspire questions worth asking: variation across categories, measures, space and time; quantitative and categorical relationships; and several perspectives considered together. The app chooses bounded representations for those tasks rather than presenting a chart gallery. Related evidence stays together; essential definitions are visible beside it.
@@ -36,15 +36,17 @@ There are three destinations:
 | Local Python and automatic profiling | Preserve source values, identify usable roles, calculate summaries and eligible views, enforce analytical permissions and build reproducible results. |
 | Native Streamlit ECharts | Show constrained, inspectable views with truthful denominators, square scatter regions and compatible comparison scales. |
 | Jev / TypeSafe | Make narrow relevance or support judgments about supplied evidence; uncertainty stays unresolved. |
-| Terra / OpenAI | Suggest interpretations, useful clarifications and allowed next views from bounded verified evidence; optionally reason over a matched analytical image and table. |
-| Hosted TabPFN | Contribute predictions to one explicitly requested retrospective diagnostic under a fixed holdout, alongside actual local references. |
+| Terra / OpenAI | Suggest interpretations, useful clarifications and allowed next views from bounded verified evidence; reason over a matched analytical image and table where the current view supports it. |
+| Hosted TabPFN | Always contribute predictions to each purposeful retrospective diagnostic under a fixed holdout, alongside actual local references. |
 | You | Supply domain context, decide business meaning, choose what to investigate and explain what the evidence supports. |
 
-Models cannot execute generated code, change a verified calculation, confirm business meaning or permit an otherwise invalid aggregation. Their prose remains an unconfirmed interpretation. Connected work is opt-in and bounded; no paid requests run on upload or ordinary reruns. Without services, exploration, comparisons and records remain useful.
+Models cannot execute generated code, change a verified calculation, confirm business meaning or permit an otherwise invalid aggregation. Their prose remains an unconfirmed interpretation. All three services are part of the app. Uploading a table starts contextual review automatically; new executed views, questions and comparisons receive fresh reviews. Ordinary reruns and returning to previously reviewed evidence reuse results. A predictive check always includes TabPFN alongside references, under a fixed holdout. Service failures are reported honestly without an off mode.
 
 ## Hosting, privacy and limits
 
 Deploy `streamlit_app.py` on **Streamlit Community Cloud with Python 3.12**. Owner API keys belong in Cloud Secrets or server environment variables. [Deployment and API setup](deployment/README.md) explains each service, exact names, sharing, request limits and spending controls. Existing V1 secret names remain compatible; no new service is required.
+
+Jev and Terra receive bounded field summaries, plotted evidence and supplied context; free-text column values are excluded by default. Predictive checks share selected encoded predictor values with TabPFN. The upload screen explains this sharing before a table is opened.
 
 One table is bounded to **25 MiB, 50,000 rows and 80 fields**. Working investigations are held in the session; a restart can discard them. Download the record to preserve work. A source-free export still contains calculated values, supplied context and any recorded model packets. Inspect it before sharing. See [analytical conventions](docs/ANALYTICAL_CONVENTIONS.md) and [evidence inspection](docs/REPLAY.md).
 

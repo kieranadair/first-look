@@ -11,7 +11,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from firstlook.providers import safe_error
+from firstlook.providers import safe_error, settings_from
 from firstlook.types import clean, digest
 
 SEED = 20261124
@@ -80,8 +80,8 @@ def _leakage(train, target, predictors, regression):
 
 def hosted_predict(task, train_x, train_y, test_x, settings, factory=None):
     """The hosted boundary deliberately has no held-out-label argument."""
-    if settings is None or not settings.available("tabpfn"):
-        raise ValueError("Hosted predictions are not configured. Local references remain available.")
+    if settings is None:
+        settings = settings_from()
     if train_x.shape[1] > 128:
         raise ValueError(
             "This utility limits hosted diagnostics to 128 encoded predictors. Select fewer fields."
@@ -143,7 +143,6 @@ def predict_structure(
     split_field=None,
     rows=None,
     settings=None,
-    hosted=False,
     hosted_factory=None,
     meanings=None,
 ):
@@ -324,11 +323,10 @@ def predict_structure(
         for name, estimator in estimators:
             estimator.fit(train_x, train_y)
             record(name, estimator.predict(test_x))
-    if hosted:
-        try:
-            record("Hosted TabPFN", hosted_predict(task, train_x, train_y, test_x, settings, hosted_factory))
-        except Exception as exc:
-            warnings.append(str(exc) if isinstance(exc, ValueError) else safe_error("TabPFN", exc))
+    try:
+        record("Hosted TabPFN", hosted_predict(task, train_x, train_y, test_x, settings, hosted_factory))
+    except Exception as exc:
+        warnings.append(str(exc) if isinstance(exc, ValueError) else safe_error("TabPFN", exc))
     scope = digest([ds.fingerprint, rows, target, permitted, split, split_field])
     return clean(
         {

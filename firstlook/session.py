@@ -26,6 +26,7 @@ class Session:
     assistance: dict = field(default_factory=dict)
     provider_history: list[dict] = field(default_factory=list)
     assistance_requests: set[str] = field(default_factory=set)
+    assistance_cache: dict[str, dict] = field(default_factory=dict)
     prediction: dict = field(default_factory=dict)
     prediction_used: bool = False
 
@@ -50,6 +51,7 @@ class Session:
                 [self.comparison.selected.id, self.comparison.reference.id] if self.comparison else None,
                 self.question,
                 self.notes,
+                self.prediction.get("id"),
             ]
         )
 
@@ -207,30 +209,27 @@ class Session:
             raise ValueError("Choose a kept observation.")
         entry["note"] = note
 
-    def begin_assistance(self, key: str, *, consent: bool = False) -> str:
+    def begin_assistance(self, key: str) -> str:
         self._dataset()
-        if not consent:
-            raise ValueError("Allow sharing for this requested assistance first.")
         if not isinstance(key, str) or not key.strip() or len(key) > 200:
             raise ValueError("This assistance request needs a bounded identity.")
         if key in self.assistance_requests:
             raise ValueError("This request has already been attempted. Reruns do not repeat paid work.")
-        if len(self.assistance_requests) >= 4:
-            raise ValueError(
-                "This table has used its four assistance requests. Local exploration is still available."
-            )
         self.assistance_requests.add(key)
         return self.assistance_context
 
-    def accept_assistance(self, payload: dict, context: str) -> bool:
-        if context != self.assistance_context or self.ds is None:
+    def accept_assistance(self, payload: dict, context: str, *, retain_stale: bool = False) -> bool:
+        if self.ds is None or context != self.assistance_context and not retain_stale:
             return False
         if not isinstance(payload, dict):
             raise ValueError("The assistant returned an invalid response.")
-        self.assistance = deepcopy(clean(payload))
+        self.assistance_cache[context] = deepcopy(clean(payload))
         self.provider_history = (self.provider_history + [{**deepcopy(clean(payload)), "context": context}])[
-            -4:
+            -24:
         ]
+        if context != self.assistance_context:
+            return False
+        self.assistance = deepcopy(self.assistance_cache[context])
         return True
 
     def begin_prediction(self) -> str:

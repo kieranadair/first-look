@@ -36,10 +36,19 @@ def dataset():
     return Dataset("numbers.csv", "source", frame, fields)
 
 
-def test_training_only_screens_fixed_protocols_and_local_references():
+def test_training_only_screens_fixed_protocols_and_local_references(monkeypatch):
+    hosted_calls = []
+
+    def controlled_hosted(task, train_x, train_y, test_x, settings, factory=None):
+        hosted_calls.append((task, len(train_y), len(test_x)))
+        value = float(np.mean(train_y)) if task == "regression" else str(train_y[0])
+        return np.repeat(value, len(test_x))
+
+    monkeypatch.setattr("firstlook.prediction.hosted_predict", controlled_hosted)
     ds = dataset()
     first = predict_structure(ds, "target", ["x", "copy", "category"])
-    assert "copy" in first["excluded"] and len(first["models"]) == 2
+    assert "copy" in first["excluded"] and len(first["models"]) == 3
+    assert first["models"][-1]["name"] == "Hosted TabPFN" and len(hosted_calls) == 1
     assert not set(first["train_ids"]) & set(first["test_ids"])
     assert set(first["train_ids"] + first["test_ids"]) == set(range(800))
     altered = deepcopy(ds)
@@ -87,9 +96,7 @@ def test_hosted_boundary_has_only_training_labels_and_rejects_misaligned_outputs
             return np.repeat(self.value, self.count)
 
     settings = Settings(tabpfn_token="controlled-key")
-    result = predict_structure(
-        ds, "target", ["x", "category"], settings=settings, hosted=True, hosted_factory=Model
-    )
+    result = predict_structure(ds, "target", ["x", "category"], settings=settings, hosted_factory=Model)
     assert len(result["models"]) == 3 and [c[0] for c in calls] == ["fit", "predict"]
     assert np.array_equal(calls[0][2], ds.frame.loc[result["train_ids"], "target"].to_numpy())
     assert len(calls[1]) == 2 and len(calls[1][1]) == len(result["test_ids"])
@@ -99,14 +106,12 @@ def test_hosted_boundary_has_only_training_labels_and_rejects_misaligned_outputs
         def wait_for_predict(self):
             return np.array([1.0])
 
-    rejected = predict_structure(
-        ds, "target", ["x"], settings=settings, hosted=True, hosted_factory=Misaligned
-    )
+    rejected = predict_structure(ds, "target", ["x"], settings=settings, hosted_factory=Misaligned)
     assert len(rejected["models"]) == 2 and any("align" in w for w in rejected["warnings"])
 
     class Failed(Model):
         def wait_for_predict(self):
             raise ValueError("controlled-key raw private payload")
 
-    failed = predict_structure(ds, "target", ["x"], settings=settings, hosted=True, hosted_factory=Failed)
+    failed = predict_structure(ds, "target", ["x"], settings=settings, hosted_factory=Failed)
     assert len(failed["models"]) == 2 and "controlled-key" not in str(failed)

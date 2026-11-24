@@ -32,5 +32,6 @@ if state.ds:
         st.caption("First Look " + __version__)
 if st.session_state.get("notice"):
     st.toast(st.session_state.pop("notice"))
-poll_work()
 page.run()
+# Process visitor actions before a completed background job requests a full rerun.
+poll_work()

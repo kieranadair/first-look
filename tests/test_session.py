@@ -85,37 +85,40 @@ def test_failed_or_stale_choices_and_provider_responses_do_not_partially_mutate_
         session.set_role("f000", "text")
     assert session.ds.field("f000").kind == "identifier"
     session.run(Request("distribution", "f002"))
-    pending = session.begin_assistance("first", consent=True)
+    pending = session.begin_assistance("first")
     session.question = "A changed question"
     assert not session.accept_assistance({"interpretation": "old"}, pending)
     assert not session.assistance and not session.provider_history
-    current = session.begin_assistance("next", consent=True)
+    current = session.begin_assistance("next")
     assert session.accept_assistance({"interpretation": "current", "context": "untrusted"}, current)
     assert session.provider_history[-1]["context"] == current
-    pending_whole = session.begin_assistance("whole-view", consent=True)
+    assert session.assistance_cache[current] == session.assistance
+    pending_whole = session.begin_assistance("whole-view")
     session.comparison = compare(session.ds, session.current.request, [0, 1], session.meanings)
     assert not session.accept_assistance({"interpretation": "Only the whole view"}, pending_whole)
+    assert not session.accept_assistance(
+        {"interpretation": "Only the whole view"}, pending_whole, retain_stale=True
+    )
+    assert session.assistance_cache[pending_whole]["interpretation"] == "Only the whole view"
+    assert session.assistance["interpretation"] == "current"
     session.set_rows([0, 1])
     assert not session.accept_prediction({"models": []}, old_context)
     assert not session.prediction
 
 
-def test_request_consent_deduplication_and_dataset_budgets_survive_ordinary_edits():
+def test_automatic_request_deduplication_and_prediction_holdout_survive_ordinary_edits():
     session = investigation()
-    with pytest.raises(ValueError, match="sharing"):
-        session.begin_assistance("first")
-    assert not session.assistance_requests
-    session.begin_assistance("first", consent=True)
+    session.begin_assistance("first")
     with pytest.raises(ValueError, match="already been attempted"):
-        session.begin_assistance("first", consent=True)
+        session.begin_assistance("first")
     session.begin_prediction()
     session.declare("f002", Meaning("additive"))
     session.question = "Another question"
     session.set_rows([0, 1])
     for key in ["second", "third", "fourth"]:
-        session.begin_assistance(key, consent=True)
-    with pytest.raises(ValueError, match="four assistance"):
-        session.begin_assistance("fifth", consent=True)
+        session.begin_assistance(key)
+    session.begin_assistance("fifth")
+    assert len(session.assistance_requests) == 5
     with pytest.raises(ValueError, match="already used"):
         session.begin_prediction()
     replacement = load_table(b"quantity\n1\n2\n", "next.csv")

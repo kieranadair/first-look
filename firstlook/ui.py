@@ -87,22 +87,36 @@ def poll_work():
     state = workspace()
     try:
         payload = job["future"].result()
-        if state.ds and _revision(state) == job["revision"]:
+        matches = (
+            state.context == job["context"]
+            if job["kind"] == "prediction"
+            else _revision(state) == job["revision"]
+        )
+        if state.ds and matches:
             if job["kind"] == "assistance":
                 state.accept_assistance(payload, job["context"])
             else:
                 state.accept_prediction(payload, job["context"])
-            st.session_state.notice = "Ready when you are. The suggestion is yours to explore."
+            st.session_state.notice = (
+                "Your predictive comparison is ready."
+                if job["kind"] == "prediction"
+                else "A fresh perspective is ready beside your evidence."
+            )
         else:
+            if job["kind"] == "assistance" and state.ds:
+                state.accept_assistance(payload, job["context"], retain_stale=True)
             st.session_state.notice = (
                 "You moved on while that work was running, so I kept your current investigation."
             )
     except Exception as exc:
-        st.session_state.notice = (
+        message = (
             str(exc)
             if isinstance(exc, ValueError)
             else "That connection did not finish. Your local work is still here."
         )
+        st.session_state.notice = message
+        if job["kind"] == "assistance" and state.ds:
+            state.accept_assistance({"status": "unavailable", "errors": [message]}, job["context"])
     del st.session_state["work"]
     st.rerun()
 
@@ -175,7 +189,7 @@ def _open_file(state):
                 help="Optional comma-separated values. Empty cells are missing; literal NA is otherwise preserved.",
             )
         st.caption(
-            "I work with the uploaded table in this session. Connected assistance is optional; you can start exploring without it."
+            "First Look uses Jev and Terra to review bounded summaries, views and the context you supply. Predictive checks use TabPFN and share selected predictor values. Keys are managed by the app owner; there’s nothing to configure."
         )
         if uploaded:
             raw = uploaded.getvalue()
@@ -193,7 +207,6 @@ def _open_file(state):
                         )
                         state.load(ds)
                     st.session_state.opened_file = file_key
-                    st.session_state.consent = False
                     st.session_state.pop("waiting", None)
                     old_work = st.session_state.pop("work", None)
                     if old_work:
@@ -243,6 +256,7 @@ def data_page():
     with preview:
         if state.current:
             draw(state.ds, state.current, "first_view", height=350)
+            assistance_controls(state)
     st.subheader("A little orientation")
     st.caption(
         "Fields describe what was recorded. Their names and patterns are clues; your knowledge gives them meaning."
@@ -382,7 +396,9 @@ def _candidate_requests(state):
                 digest(candidate),
                 {"id": digest(candidate), "request": asdict(candidate), "label": title_for(ds, candidate)},
             )
-    return list(unique.values())[:3]
+    return list(unique.values())[:3] or [
+        {"id": digest(current), "request": asdict(current), "label": title_for(ds, current)}
+    ]
 
 
 def run_request(state, request):
@@ -933,59 +949,82 @@ def comparison_controls(state):
                 st.error(str(exc))
 
 
+def ensure_assistance(state, *, retry=False):
+    """Review new analytical context once; returning to evidence reuses its review."""
+    if state.ds is None or state.current is None:
+        return
+    context = state.assistance_context
+    if retry:
+        state.assistance_cache.pop(context, None)
+    elif context in state.assistance_cache:
+        state.assistance = copy.deepcopy(state.assistance_cache[context])
+        return
+    state.assistance = {}
+    if st.session_state.get("work"):
+        return
+    try:
+        cfg = configuration()
+        packet = build_packet(
+            state.ds, state.current, state.question, state.notes, _candidate_requests(state), state.comparison
+        )
+        packet["declared_meanings"] = clean(state.meanings)
+        packet["recording_context"] = clean(state.time_rules)
+        if state.prediction:
+            packet["predictive_check"] = {
+                k: state.prediction.get(k)
+                for k in [
+                    "id",
+                    "definition",
+                    "task",
+                    "target",
+                    "predictors",
+                    "split",
+                    "split_field",
+                    "warnings",
+                ]
+            }
+            packet["predictive_check"]["models"] = [
+                {k: model.get(k) for k in ["name", "metric", "score"]}
+                for model in state.prediction.get("models", [])
+            ]
+            packet["predictive_check"]["support"] = {
+                "training": len(state.prediction.get("train_ids", [])),
+                "held_out": len(state.prediction.get("test_ids", [])),
+            }
+        key = digest([packet, cfg.openai_model, cfg.typesafe_model])
+        if retry:
+            state.assistance_requests.discard(key)
+        if key in state.assistance_requests:
+            return
+        state.begin_assistance(key)
+        st.session_state.work = {
+            "future": executor().submit(
+                assist_view,
+                replace(state.ds, fields=copy.deepcopy(state.ds.fields)),
+                copy.deepcopy(state.current),
+                packet,
+                cfg,
+            ),
+            "kind": "assistance",
+            "context": context,
+            "revision": context,
+        }
+    except ValueError as exc:
+        state.accept_assistance({"status": "unavailable", "errors": [str(exc)]}, context)
+
+
 def assistance_controls(state):
-    cfg = configuration()
+    ensure_assistance(state)
     with st.container(border=True):
-        st.markdown("**Want a thinking partner?**")
+        st.markdown("**A perspective alongside your evidence**")
         st.caption(
-            "We can connect what you know with this view, suggest a useful next comparison, or help unpack something surprising. Suggestions stay separate from measured facts."
+            "Jev and Terra connect the recorded evidence with your question and suggest useful next steps. Their interpretations remain yours to question."
         )
-        st.checkbox(
-            "Allow connected assistance for this table",
-            key="consent",
-            help="Shares bounded field summaries, plotted values and your supplied context with the configured services. Optional visual reasoning receives an offscreen analytical image and its matched table. Free-text column values are omitted; labels and your notes may still contain sensitive context. Hosted prediction shares the selected predictor values. Owner keys stay on the server.",
-        )
-        if st.button(
-            "Think this through with me",
-            key="ask_assistance",
-            disabled=not st.session_state.get("consent")
-            or bool(st.session_state.get("work"))
-            or not (cfg.available("terra") or cfg.available("jev"))
-            or not cfg.available("terra")
-            and not state.question
-            or state.current is None,
-        ):
-            try:
-                candidates = _candidate_requests(state)
-                packet = build_packet(
-                    state.ds, state.current, state.question, state.notes, candidates, state.comparison
-                )
-                packet["declared_meanings"] = clean(state.meanings)
-                packet["recording_context"] = clean(state.time_rules)
-                key = digest([packet, cfg.openai_model, cfg.typesafe_model])
-                context = state.begin_assistance(key, consent=True)
-                st.session_state.work = {
-                    "future": executor().submit(
-                        assist_view,
-                        replace(state.ds, fields=copy.deepcopy(state.ds.fields)),
-                        copy.deepcopy(state.current),
-                        packet,
-                        cfg,
-                    ),
-                    "kind": "assistance",
-                    "context": context,
-                    "revision": _revision(state),
-                }
-                st.rerun()
-            except ValueError as exc:
-                st.warning(str(exc))
-        if not (cfg.available("terra") or cfg.available("jev")):
+        if st.session_state.get("work", {}).get("kind") == "assistance":
             st.caption(
-                "Connected assistance is not configured here. Your local calculations, comparisons and record work in full."
-            )
-        elif not cfg.available("terra") and not state.question:
-            st.caption(
-                "Jev can judge relevant next steps once you add the question you want to understand under ‘Question and context’."
+                "Reviewing this view and its context… You can keep exploring."
+                if st.session_state.work["context"] == state.assistance_context
+                else "Finishing the previous review; this view is next. You can keep exploring."
             )
         if state.assistance:
             answer = state.assistance
@@ -995,7 +1034,7 @@ def assistance_controls(state):
             if answer.get("clarification"):
                 st.markdown("**A question to consider:** " + answer["clarification"])
                 st.caption(
-                    "You can add your answer under ‘Question and context’. It will accompany the next requested review."
+                    "You can add your answer under ‘Question and context’. I’ll use it in the next review."
                 )
             for hypothesis in answer.get("hypotheses", []):
                 st.caption(
@@ -1019,6 +1058,12 @@ def assistance_controls(state):
                     st.rerun()
             for error in answer.get("errors", []):
                 st.caption(error)
+
+            if answer.get("errors") and st.button(
+                "Try this review again", key="retry_assistance", disabled=bool(st.session_state.get("work"))
+            ):
+                ensure_assistance(state, retry=True)
+                st.rerun()
 
 
 def prediction_controls(state):
@@ -1065,10 +1110,8 @@ def prediction_controls(state):
                 st.caption("This table does not have a suitable field for that split.")
                 return
             split_field = st.selectbox("Split on", fields, format_func=ds.label)
-        hosted = st.checkbox(
-            "Include the configured tabular foundation model",
-            disabled=not cfg.available("tabpfn"),
-            key="use_hosted",
+        st.caption(
+            "TabPFN is included automatically alongside a simple reference and a linear or logistic baseline. Choose the prediction question and holdout that fit your investigation."
         )
         appropriate = st.checkbox(
             "This target, predictor set and split match the question I’m investigating",
@@ -1083,10 +1126,6 @@ def prediction_controls(state):
             or bool(st.session_state.get("work")),
         ):
             try:
-                if hosted and not st.session_state.get("consent"):
-                    raise ValueError(
-                        "Allow connected assistance before sharing predictor values with the hosted model."
-                    )
                 from firstlook.prediction import predict_structure
 
                 context = state.begin_prediction()
@@ -1099,7 +1138,6 @@ def prediction_controls(state):
                     split_field,
                     state.rows,
                     cfg,
-                    hosted,
                     meanings=copy.deepcopy(state.meanings),
                 )
                 st.session_state.work = {

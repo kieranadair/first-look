@@ -84,6 +84,32 @@ def response(payload):
     }
 
 
+def controlled_judge():
+    def reply(request):
+        body = json.loads(request.content)
+        return httpx2.Response(
+            200,
+            json={
+                "model": "controlled-jev",
+                "usage": {},
+                "answers": {key: {"type": "noul", "noul": 0.5} for key in body["questions"]},
+            },
+        )
+
+    return TypeSafeClient(
+        api_key="controlled-key",
+        retry=RetryPolicy(max_retries=0),
+        http_client=httpx2.Client(transport=httpx2.MockTransport(reply)),
+    )
+
+
+def controlled_terra():
+    transport = httpx2.MockTransport(
+        lambda _: httpx2.Response(200, json=response(Assistance(interpretation="").model_dump()))
+    )
+    return OpenAI(api_key="controlled-key", http_client=httpx2.Client(transport=transport))
+
+
 def test_openai_structured_evidence_ids_privacy_and_safe_failures():
     sent = []
     payload = Assistance(
@@ -101,7 +127,7 @@ def test_openai_structured_evidence_ids_privacy_and_safe_failures():
     )
     config = settings_from({"providers": {"openai_api_key": "controlled-key"}})
     data = packet()
-    result = assist(data, config, client=client)
+    result = assist(data, config, client=client, judge_client=controlled_judge())
     assert result["status"] == "suggestion" and result["suggestions"][0]["id"] == "by_group"
     body = sent[0]
     assert body["store"] is False and body["text"]["format"]["type"] == "json_schema"
@@ -120,7 +146,9 @@ def test_openai_structured_evidence_ids_privacy_and_safe_failures():
     view = analyze(ds, Request("distribution", "x"))
     payload.citations = [view.id]
     payload.suggestion_ids = []
-    reviewed = assist_view(ds, view, build_packet(ds, view), config, client=client)
+    reviewed = assist_view(
+        ds, view, build_packet(ds, view), config, client=client, judge_client=controlled_judge()
+    )
     image_input = sent[-1]["input"][0]["content"]
     assert len(image_input) == 2 and image_input[1]["type"] == "input_image"
     visual = json.loads(image_input[0]["text"])["visual_evidence"]
@@ -130,7 +158,7 @@ def test_openai_structured_evidence_ids_privacy_and_safe_failures():
     comparison = compare(ds, Request("distribution", "x", representation="quantile"), [0, 1])
     compared = build_packet(ds, view, comparison=comparison)
     payload.citations = [comparison.selected.id, comparison.reference.id]
-    reviewed = assist_view(ds, view, compared, config, client=client)
+    reviewed = assist_view(ds, view, compared, config, client=client, judge_client=controlled_judge())
     comparison_input = sent[-1]["input"][0]["content"]
     assert len(comparison_input) == 1  # Do not present an overall PNG as a comparison image.
     supplied = json.loads(comparison_input[0]["text"])
@@ -143,14 +171,21 @@ def test_openai_structured_evidence_ids_privacy_and_safe_failures():
     assert '"eligible_rows"' not in comparison_input[0]["text"]
     assert '"row"' not in comparison_input[0]["text"]
     assert '"rows"' not in comparison_input[0]["text"]
+    compared["predictive_check"] = {
+        "id": "fixed-holdout",
+        "models": [{"name": "Hosted TabPFN", "metric": "MAE", "score": 1.0}],
+    }
+    payload.citations = ["fixed-holdout"]
+    reviewed = assist_view(ds, view, compared, config, client=client, judge_client=controlled_judge())
+    assert reviewed["citations"] == ["fixed-holdout"]
     with pytest.raises(ValueError, match="match"):
-        assist_view(ds, view, data, config, client=client)
+        assist_view(ds, view, data, config, client=client, judge_client=controlled_judge())
     with pytest.raises(ValueError, match="matched"):
-        assist(data, config, client=client, images=[b"unmatched"])
+        assist(data, config, client=client, judge_client=controlled_judge(), images=[b"unmatched"])
     payload.citations = ["result"]
     payload.suggestion_ids = ["invented_view"]
-    rejected = assist(data, config, client=client)
-    assert rejected["status"] == "unavailable" and rejected["suggestions"] == []
+    rejected = assist(data, config, client=client, judge_client=controlled_judge())
+    assert rejected["suggestions"] == [] and rejected["errors"]
     bad = OpenAI(
         api_key="controlled-key",
         http_client=httpx2.Client(
@@ -160,10 +195,22 @@ def test_openai_structured_evidence_ids_privacy_and_safe_failures():
         ),
         max_retries=0,
     )
-    failed = assist(data, config, client=bad)
+    failed = assist(data, config, client=bad, judge_client=controlled_judge())
     assert "not accepted" in failed["errors"][0] and "controlled-key" not in json.dumps(failed)
-    assert not Settings(openai_api_key="REPLACE_WITH_OPENAI_API_KEY").available("terra")
-    assert not Settings(openai_api_key="controlled-key", provider_mode="offline").available("terra")
+    legacy = settings_from(
+        {
+            "app": {
+                "provider_mode": "offline",
+                "allow_external_analysis": False,
+                "terra_visual_review": False,
+            },
+            "providers": {"openai_api_key": "controlled-key"},
+        }
+    )
+    assert not hasattr(legacy, "provider_mode") and not hasattr(legacy, "available")
+    always = assist(data, legacy, client=client, judge_client=controlled_judge())
+    assert {r["provider"] for r in always["records"]} == {"Jev"}  # Invalid Terra output cannot suppress Jev.
+    assert compared["goal_source"] == "general exploration" and compared["goal"]
 
 
 def test_typesafe_atomic_judgments_uncertainty_and_no_meaning_permission():
@@ -189,7 +236,9 @@ def test_typesafe_atomic_judgments_uncertainty_and_no_meaning_permission():
     )
     data = packet()
     original = json.dumps(data, sort_keys=True)
-    result = assist(data, Settings(typesafe_api_key="controlled-key"), judge_client=client)
+    result = assist(
+        data, Settings(typesafe_api_key="controlled-key"), judge_client=client, client=controlled_terra()
+    )
     assert result["judgments"][0]["status"] == "unresolved"
     assert result["judgments"][0]["probability"] == 0.5 and result["suggestions"] == []
     assert json.dumps(data, sort_keys=True) == original and result["hypotheses"] == []
@@ -197,7 +246,7 @@ def test_typesafe_atomic_judgments_uncertainty_and_no_meaning_permission():
     assert all(
         q["type"] == "noul" and set(q["criteria"]) == {"true", "false"} for q in body["questions"].values()
     )
-    assert result["records"][0]["input"] == body["state"]
+    assert next(r for r in result["records"] if r["provider"] == "Jev")["input"] == body["state"]
     assert "private opening note" not in json.dumps(body)
     bad = TypeSafeClient(
         api_key="controlled-key",
@@ -207,5 +256,7 @@ def test_typesafe_atomic_judgments_uncertainty_and_no_meaning_permission():
             transport=httpx2.MockTransport(lambda _: httpx2.Response(429, json={"error": "controlled-key"}))
         ),
     )
-    result = assist(data, Settings(typesafe_api_key="controlled-key"), judge_client=bad)
+    result = assist(
+        data, Settings(typesafe_api_key="controlled-key"), judge_client=bad, client=controlled_terra()
+    )
     assert result["judgments"] == [] and "controlled-key" not in json.dumps(result)
