@@ -32,7 +32,10 @@ if ws.investigation is None:
         "Local analysis works without API keys. It screens supported perspectives and records what the budget leaves unexamined.",
     )
     if st.button(
-        "Build local overview", type="primary", disabled=bool(ws.job_id) or ws.replay, key="build_overview"
+        "Build local overview",
+        type="primary",
+        disabled=(bool(ws.job_id) and ws.job_kind != "preparation") or ws.replay,
+        key="build_overview",
     ):
         try:
             start_analysis(ws)

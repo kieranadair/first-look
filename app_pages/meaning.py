@@ -40,6 +40,12 @@ ds = ws.dataset
 model = get_model(ds)
 ctx = ws.context()
 
+st.page_link(
+    "app_pages/preparation.py",
+    label="Review related definitions together in Preparation",
+    icon=":material/auto_awesome:",
+)
+
 
 def saved(message):
     ws.invalidate()

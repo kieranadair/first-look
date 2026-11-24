@@ -95,6 +95,11 @@ if ws.text_runs or ws.investigation.judgments:
         f"{len(ws.text_runs)} frozen text runs and {len(ws.investigation.judgments)} typed judgment batches also travel with this investigation. Recorded inputs can contain source text even when the original table is omitted."
     )
     st.page_link("app_pages/judgments.py", label="Inspect model judgments", icon=":material/fact_check:")
+if ws.preparation:
+    st.caption(
+        "Preparation definitions, supplied notes and illustrative source rows also travel with this export, even when the original table is omitted. Review the preparation record before sharing."
+    )
+    st.page_link("app_pages/preparation.py", label="Inspect preparation", icon=":material/auto_awesome:")
 if not ws.pins and saved_view == "Observations":
     st.markdown("### Start an evidence brief.")
     st.caption("Use Pin on an observation. Its computed values and completed checks travel with it.")
@@ -188,6 +193,8 @@ export_state = digest(
         ws.note_review,
         ws.semantic_scenarios,
         ws.event_runs,
+        ws.preparation,
+        ws.preparation_history,
     ]
 )
 if prepare:

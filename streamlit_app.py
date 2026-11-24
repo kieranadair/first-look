@@ -5,6 +5,7 @@ import streamlit as st
 from firstlook import __version__
 from firstlook.judgments import POLICY_VERSION
 from firstlook.analytical_tasks import TASK_POLICY
+from firstlook.preparation_contracts import PREPARATION_POLICY
 from firstlook.ui.runtime import poll_job, settings, workspace
 from firstlook.visualization import compiler as chart_compiler
 
@@ -28,6 +29,12 @@ pages = {
             icon=":material/table_chart:",
             default=True,
             help="Open a table, inspect its fields and set the direction for your first investigation.",
+        ),
+        st.Page(
+            "app_pages/preparation.py",
+            title="Preparation",
+            icon=":material/auto_awesome:",
+            help="Review an automatically prepared understanding, explain context once and reuse approved definitions.",
         ),
         st.Page(
             "app_pages/meaning.py",
@@ -129,6 +136,7 @@ with st.sidebar:
         )
     with st.expander("About this workbench"):
         st.caption("Task policy: " + TASK_POLICY)
+        st.caption("Preparation policy: " + PREPARATION_POLICY)
         st.caption(
             "An open-source exploration utility. Descriptive patterns and predictive diagnostics do not establish causality."
         )

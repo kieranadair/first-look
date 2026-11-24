@@ -57,6 +57,7 @@ This command starts and stops its own localhost fixture (default port 8766), mea
 ## Reference material
 
 - [Current implementation context](CONTEXT.md)
+- [Automatic preparation: workflow, architecture and limits](preparation-uplift.md) and [build plan](preparation-plan.md). Run `python -m scripts.preparation_smoke --url http://127.0.0.1:8770` against a development-only agent server for its runtime check.
 - [Task-validity uplift](task-validity-uplift.md), [plan](task-validity-plan.md) and [research-to-pattern mapping](../research/task-validity.md)
 - [Typed-judgment uplift report](jev-uplift.md) and [build plan](jev-uplift-plan.md)
 - [Interface refinement and design rationale](ui-uplift.md), including the authorized screenshot review of bundled examples

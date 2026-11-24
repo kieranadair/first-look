@@ -214,6 +214,9 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
         "profiles/dataset.json": json_bytes(workspace.profile),
         "profiles/semantics.json": json_bytes([f.model_dump(mode="json") for f in ds.record.fields]),
         "profiles/semantic-review.json": json_bytes(workspace.semantic_review),
+        "profiles/preparation.json": json_bytes(
+            {"draft": workspace.preparation, "history": workspace.preparation_history}
+        ),
         "semantics/contract.json": json_bytes(
             ds.record.semantic_model.model_dump(mode="json") if ds.record.semantic_model else None
         ),
@@ -278,6 +281,7 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
         or workspace.text_proposal
         or workspace.text_runs
         or workspace.note_review
+        or workspace.preparation_history
         or any(b.interpretation for b in workspace.comparisons)
         or (workspace.comparison and workspace.comparison.interpretation)
     )
@@ -289,7 +293,9 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
             "fingerprint": ds.record.fingerprint,
             "context": inv.context.id,
             "results": list(inv.results),
-            "contains_private_data": bool(include_data or contains_model_inputs or workspace.event_runs),
+            "contains_private_data": bool(
+                include_data or contains_model_inputs or workspace.event_runs or workspace.preparation
+            ),
             "contains_model_inputs": contains_model_inputs,
         }
     )
@@ -530,6 +536,25 @@ def import_bundle(
     ws.text_proposal = workflow.get("text_proposal", {})
     ws.note_review = workflow.get("note_review", {})
     ws.semantic_scenarios = workflow.get("semantic_scenarios", [])
+    preparation = json.loads(files.get("profiles/preparation.json", b'{"draft":{},"history":[]}'))
+    if (
+        not isinstance(preparation, dict)
+        or set(preparation) != {"draft", "history"}
+        or not isinstance(preparation["history"], list)
+        or len(preparation["history"]) > 3
+    ):
+        raise ValueError("Invalid preparation record.")
+    if preparation["draft"]:
+        from firstlook.preparation import validate_preparation_evidence
+
+        draft = validate_preparation_evidence(ds, preparation["draft"])
+        ws.preparation = draft.model_dump(mode="json")
+    ws.preparation_history = preparation["history"]
+    if ws.preparation_history:
+        from firstlook.preparation import validate_preparation_evidence
+
+        for history in ws.preparation_history:
+            validate_preparation_evidence(ds, history)
     if (
         not isinstance(ws.semantic_scenarios, list)
         or len(ws.semantic_scenarios) > 4

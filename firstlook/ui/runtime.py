@@ -48,13 +48,23 @@ def snapshot(ws: Workspace) -> Dataset:
 
 def start_analysis(ws: Workspace, connected: bool = False) -> None:
     ds, ctx, cfg = snapshot(ws), ws.context(), settings()
+    goal = str(ws.preparation_inputs.get("goal", ""))[:1000]
     if connected and not st.session_state.get("external_ok", False):
         raise ValueError("Enable external analysis for this dataset before connecting providers.")
     model_plan = suggested_model_plan(ds, ctx) if connected and ws.model_count < 2 else None
+    if ws.job_id and ws.job_kind == "preparation" and not connected:
+        # Preserve preparation's worker handle while allowing immediate local exploration.
+        with st.spinner("Computing a local overview while connected preparation continues"):
+            inv = discover(ds, ctx)
+            inv.goal = goal
+            automatic_challenges(ds, inv)
+        ws.investigation = inv
+        return
 
     def work(progress, cancelled):
         progress("Computing eligible analytical views")
         inv = discover(ds, ctx)
+        inv.goal = goal
         if cancelled():
             return inv
         progress("Challenging the leading observations")
@@ -413,6 +423,151 @@ def start_semantic_review(ws: Workspace) -> None:
     ws.semantic_review_count += 1
 
 
+def start_preparation(ws: Workspace):
+    """One session-owned job; explicit request or an enabled per-dataset automatic mode."""
+    from firstlook.preparation import build_preparation
+    from firstlook.preparation_connected import enrich_preparation, preparation_sources
+    from firstlook.preparation_contracts import PREPARATION_POLICY, PreparationDraft
+
+    if ws.replay or not ws.dataset:
+        raise ValueError("Open an editable dataset before preparing it.")
+    if ws.job_id:
+        raise ValueError("Let the current task finish or cancel it before preparing another draft.")
+    cfg, ds, ctx = settings(), snapshot(ws), ws.context()
+    if not st.session_state.get("external_ok") or not (cfg.available("terra") or cfg.available("jev")):
+        raise ValueError(
+            "Allow connected preparation for this dataset first. The local draft remains available."
+        )
+    sources = preparation_sources(
+        ws.preparation_inputs.get("notes", ""), ws.preparation_inputs.get("dictionary", "")
+    )
+    goal = str(ws.preparation_inputs.get("goal", ""))[:1000]
+    draft = (
+        PreparationDraft.model_validate(ws.preparation)
+        if ws.preparation
+        else build_preparation(ds, goal, sources)
+    )
+    if draft.goal != goal or draft.sources != sources or draft.base_semantics != ds.context().semantics:
+        draft = build_preparation(ds, goal, sources)
+    reusable = [c.payload for c in draft.changes if c.origin == "template"]
+    request = digest(
+        [
+            ds.record.fingerprint,
+            ds.record.parser,
+            ds.context().semantics,
+            goal,
+            sources,
+            cfg.openai_model,
+            cfg.typesafe_model,
+            PREPARATION_POLICY,
+            reusable,
+        ]
+    )
+    if request in ws.preparation_cache:
+        ws.preparation = copy.deepcopy(ws.preparation_cache[request])
+        ws.message = "Restored this exact preparation request from your session. No provider call was made."
+        return
+    if request in ws.preparation_requests:
+        raise ValueError(
+            "This exact request has already been attempted; it will not run again on a rerun. Change the supplied context to request another draft."
+        )
+    if len(ws.preparation_requests) >= 3:
+        raise ValueError(
+            "This upload has used its three connected preparation requests. Local review and edits remain available."
+        )
+    draft.request = request
+
+    def task(progress, cancelled):
+        return enrich_preparation(
+            ds,
+            draft,
+            TerraProvider(cfg) if cfg.available("terra") else None,
+            JevProvider(cfg) if cfg.available("jev") else None,
+            progress,
+            cancelled,
+            visual=cfg.terra_visual_review,
+        ).model_dump(mode="json")
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "preparation:" + request, task)
+    ws.job_context, ws.job_kind = ctx.id, "preparation"
+    ws.preparation_requests.add(request)
+
+
+def accept_preparation(ws, result):
+    """Receiving a draft grants no permission; per-subject checks preserve concurrent edits."""
+    from firstlook.preparation import assert_scope
+    from firstlook.preparation_contracts import PreparationDraft
+
+    draft = PreparationDraft.model_validate(result)
+    assert_scope(ws.dataset, draft)
+    ws.preparation = draft.model_dump(mode="json")
+    ws.preparation_cache[draft.request] = copy.deepcopy(ws.preparation)
+    ws.preparation_history = (
+        ws.preparation_history
+        + [
+            {
+                "request": draft.request,
+                "policy": draft.policy,
+                "dataset": draft.dataset,
+                "parsing_scope": draft.parsing_scope,
+                "base_semantics": draft.base_semantics,
+                "goal": draft.goal,
+                "sources": draft.sources,
+                "records": draft.records,
+                "errors": draft.errors,
+                "telemetry": draft.telemetry,
+            }
+        ]
+    )[-3:]
+
+
+def apply_prepared_bundle(ws, ids):
+    from firstlook.preparation import apply_preparation
+    from firstlook.preparation_contracts import PreparationDraft
+
+    if ws.replay:
+        raise ValueError("Recorded preparation is read-only.")
+    draft = PreparationDraft.model_validate(ws.preparation)
+    before = ws.dataset.record.model_dump(mode="json")
+    applied = apply_preparation(ws.dataset, draft, ids)
+    ws.preparation_undo = {"before": before, "after": ws.dataset.context().semantics}
+    ws.preparation = draft.model_dump(mode="json")
+    ws.invalidate()
+    if any(c.kind == "task" and c.id in applied for c in draft.changes):
+        for key in ["model_target", "model_split", "model_split_field"]:
+            st.session_state.pop(key, None)
+    ws.message = (
+        f"Applied {len(applied)} related definitions in one transaction. The new contract is ready to use."
+    )
+    return applied
+
+
+def undo_preparation(ws):
+    from firstlook.contracts import DatasetRecord
+    from firstlook.semantic.model import commit_model, get_model
+
+    if ws.replay or not ws.preparation_undo or ws.dataset.context().semantics != ws.preparation_undo["after"]:
+        raise ValueError(
+            "The contract changed after this bundle. Use Meaning to review it; automatic undo is no longer applicable."
+        )
+    record = DatasetRecord.model_validate(ws.preparation_undo["before"])
+    clone = Dataset(record, ws.dataset.frame, ws.dataset.raw)
+    commit_model(clone, get_model(clone), "table", "undo_preparation", ws.preparation_undo["after"])
+    ws.dataset.record = clone.record
+    ws.preparation_undo = {}
+    from firstlook.preparation import build_preparation
+    from firstlook.preparation_connected import preparation_sources
+
+    sources = preparation_sources(
+        ws.preparation_inputs.get("notes", ""), ws.preparation_inputs.get("dictionary", "")
+    )
+    ws.preparation = build_preparation(ws.dataset, ws.preparation_inputs.get("goal", ""), sources).model_dump(
+        mode="json"
+    )
+    ws.invalidate()
+    ws.message = "Restored the definitions from before that bundle and recorded the undo."
+
+
 def start_recipe(ws: Workspace, recipe: str, fields: list[str], params: dict):
     from firstlook.exploration import RECIPES, perspective_coverage
 
@@ -583,8 +738,20 @@ def poll_job():
     same_revision = ws.job_kind != "comparison" or (
         ws.selection is not None and ws.selection.revision == ws.job_revision
     )
-    if job.state == "completed" and ws.dataset and job.context == ws.context().id and same_revision:
-        if ws.job_kind == "comparison":
+    if (
+        job.state == "completed"
+        and ws.dataset
+        and (job.context == ws.context().id or ws.job_kind == "preparation")
+        and same_revision
+    ):
+        if ws.job_kind == "preparation":
+            try:
+                accept_preparation(ws, job.result)
+            except ValueError:
+                ws.message = (
+                    "An earlier preparation used different source bytes or parsing and was discarded."
+                )
+        elif ws.job_kind == "comparison":
             ws.comparison = job.result
         elif ws.job_kind == "interpretation":
             ws.question_review = job.result
@@ -623,7 +790,13 @@ def poll_job():
                 if ws.job_kind == "connected":
                     ws.model_count += 1
         ws.bound_views()
-        ws.message = "The investigation is ready."
+        if ws.job_kind == "preparation":
+            ws.message = (
+                ws.message
+                or "Your preparation draft is ready to review. Existing declarations have not been changed."
+            )
+        else:
+            ws.message = "The investigation is ready."
     elif job.state == "failed":
         ws.message = job.error
     elif job.state == "completed":

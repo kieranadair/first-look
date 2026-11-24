@@ -14,6 +14,7 @@ from firstlook.profiling import profile
 from firstlook.semantic.model import get_model
 from firstlook.semantics import apply_semantics, semantic_table
 from firstlook.ui.components import chart_view, page_header
+from firstlook.ui.preparation import preparation_overview
 from firstlook.ui.runtime import manager, start_analysis, start_semantic_review, settings, workspace
 
 ws = workspace()
@@ -134,7 +135,10 @@ semantic_model = get_model(ds)
 actions = st.container(horizontal=True, vertical_alignment="center", gap="small")
 with actions:
     investigate = st.button(
-        "Investigate this dataset", type="primary", icon=":material/query_stats:", disabled=bool(ws.job_id)
+        "Investigate this dataset",
+        type="primary",
+        icon=":material/query_stats:",
+        disabled=bool(ws.job_id) and ws.job_kind != "preparation",
     )
     with st.popover("Investigation settings", icon=":material/tune:"):
         targets = eligible_targets(ds)
@@ -193,10 +197,16 @@ grid.metric("Fields", p["columns"])
 grid.metric("Missing cells", f"{p['missing'] / max(p['cells'], 1):.1%}")
 grid.metric("Duplicate rows", f"{p['duplicates']:,}")
 
+preparation_overview(ws)
+
 with st.container(horizontal=True, vertical_alignment="center", gap="small"):
     st.caption(
         "**One row represents:** "
-        + (ds.record.description or "Not yet described. Add collection context when you know it.")
+        + (
+            semantic_model.grain
+            if semantic_model.grain_confirmed
+            else ds.record.description or "Not yet described. Add collection context when you know it."
+        )
     )
     with st.popover("Edit context", icon=":material/edit_note:"):
         with st.form("dataset_context_form", border=False):

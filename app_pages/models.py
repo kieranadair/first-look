@@ -43,7 +43,11 @@ if ws.model is None or getattr(configure, "open", False):
                     "Model exploration needs an eligible focus with at least 200 labeled rows and adequate class support."
                 )
             else:
-                default = targets.index(ws.focus) if ws.focus in targets else 0
+                from firstlook.analytical_tasks import current_task
+
+                task = current_task(ds)
+                preferred = task.target if task.target in targets else ws.focus
+                default = targets.index(preferred) if preferred in targets else 0
                 from firstlook.semantic.model import get_model
 
                 declared_group = get_model(ds).model_group
@@ -54,6 +58,9 @@ if ws.model is None or getattr(configure, "open", False):
                     split = st.selectbox(
                         "Evaluation split",
                         ["group"] if declared_group else ["random", "group", "time"],
+                        index=2
+                        if task.purpose == "prediction" and task.anchor_field and not declared_group
+                        else 0,
                         format_func=lambda x: {
                             "random": "Held-out rows",
                             "group": "Unseen groups",
@@ -72,7 +79,13 @@ if ws.model is None or getattr(configure, "open", False):
                     )
                     if options:
                         split_field = st.selectbox(
-                            "Split field", options, format_func=ds.label, key="model_split_field"
+                            "Split field",
+                            options,
+                            index=options.index(task.anchor_field)
+                            if split == "time" and task.anchor_field in options
+                            else 0,
+                            format_func=ds.label,
+                            key="model_split_field",
                         )
                 initial = model_preflight(ds, ws.context(), target, split, split_field)
                 candidates = initial.get("predictors", [])

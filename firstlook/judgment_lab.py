@@ -47,6 +47,13 @@ def evaluate_cases(jev=None):
 
 def recorded_judgments(workspace):
     records = list(workspace.investigation.judgments) if workspace.investigation else []
+    preparations = [workspace.preparation] + workspace.preparation_history
+    for preparation in preparations:
+        records.extend(
+            JudgmentBatch.model_validate(r)
+            for r in preparation.get("records", [])
+            if "definitions" in r and "answers" in r
+        )
     for raw in [workspace.question_review.get("judgment"), workspace.note_review.get("record")]:
         if raw:
             records.append(JudgmentBatch.model_validate(raw))

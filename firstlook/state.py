@@ -54,6 +54,16 @@ class Workspace:
     event_runs: list[dict] = field(default_factory=list)
     event_prepare_count: int = 0
     event_model_count: int = 0
+    preparation: dict = field(default_factory=dict)
+    preparation_inputs: dict = field(default_factory=dict)
+    preparation_requests: set[str] = field(default_factory=set)
+    preparation_history: list[dict] = field(default_factory=list)
+    preparation_cache: dict = field(default_factory=dict)
+    automatic_preparation: bool = False
+    preparation_templates: list[dict] = field(default_factory=list)
+    preparation_readiness: dict = field(default_factory=dict)
+    preparation_undo: dict = field(default_factory=dict)
+    preparation_generation: int = 0
 
     def context(self):
         if self.dataset is None:
@@ -61,6 +71,7 @@ class Workspace:
         return self.dataset.context(self.rows, self.focus, self.assumption)
 
     def invalidate(self):
+        self.preparation_readiness = {}
         self.investigation, self.model = None, None
         self.model_count = 0
         self.followups = 0
@@ -150,6 +161,7 @@ class Workspace:
     def load(self, dataset: Dataset):
         from firstlook.profiling import profile
 
+        self.preparation_generation += 1
         self.dataset = dataset
         self.profile = profile(dataset)
         self.focus, self.rows = None, None
@@ -161,6 +173,31 @@ class Workspace:
         self.replay = False
         self.semantic_review = {}
         self.semantic_review_count = 0
+        from firstlook.preparation import build_preparation
+        from firstlook.preparation_connected import embedded_dictionary, preparation_sources
+
+        dictionary = embedded_dictionary(dataset)
+        self.preparation = build_preparation(
+            dataset, sources=preparation_sources(dictionary=dictionary)
+        ).model_dump(mode="json")
+        self.preparation_inputs = {"goal": "", "notes": "", "dictionary": dictionary}
+        self.preparation_requests = set()
+        self.preparation_history = []
+        self.preparation_cache = {}
+        self.automatic_preparation = False
+        self.preparation_undo = {}
+        if self.preparation_templates:
+            from firstlook.preparation_templates import import_template
+
+            for template in reversed(self.preparation_templates):
+                try:
+                    reused = import_template(dataset, template["data"])
+                    info = reused.telemetry.get("template", {})
+                    if isinstance(info, dict) and info.get("matched_fields") == info.get("source_fields"):
+                        self.preparation = reused.model_dump(mode="json")
+                        break
+                except ValueError:
+                    continue
 
 
 def pin(workspace: Workspace, finding_id: str) -> None:

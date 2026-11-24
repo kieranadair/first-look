@@ -124,6 +124,27 @@ def note_specs(notes):
     ]
 
 
+def preparation_specs(alias):
+    return [
+        JudgmentSpec(
+            id=alias + "_support",
+            purpose="Prepared definition supported by supplied wording",
+            kind="noul",
+            question=f"Do the supplied passages in `definitions.{alias}` explicitly state that proposed definition?",
+            yes="The source wording explicitly establishes the proposed meaning, estimator or recording rule.",
+            no="The source omits a required fact, only names the field, or the proposed meaning goes beyond its wording.",
+        ),
+        JudgmentSpec(
+            id=alias + "_scope",
+            purpose="Source applicability to the proposed field and process",
+            kind="noul",
+            question=f"Do the supplied passages in `definitions.{alias}` describe that proposal's field and recording process?",
+            yes="The wording describes the same field, entity grain and recording process as the proposed definition.",
+            no="The passage describes another field, population, entity grain or recording process, or does not identify the proposal's scope.",
+        ),
+    ]
+
+
 def built_in_definitions():
     state = {
         "measures": {"body_mass": {"name": "Body mass", "role": "measure"}},
@@ -141,6 +162,7 @@ def built_in_definitions():
         + [relevance_spec("candidate_relevance", "candidates.example")]
         + note_specs({"collection_note": "The supplied collection note, retained verbatim in state."})
         + claim_specs("example")
+        + preparation_specs("preparation_example")
     )
 
 

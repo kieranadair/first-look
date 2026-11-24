@@ -113,6 +113,81 @@ def openai_client(handler):
     )
 
 
+def test_preparation_uses_official_structured_response_boundary_and_records_instructions():
+    from firstlook.preparation import build_preparation
+    from firstlook.preparation_connected import preparation_packet
+    from firstlook.preparation_contracts import PreparationInterpretation
+    from firstlook.examples import load_example
+
+    sent = []
+    result = PreparationInterpretation(summary="Recorded measurements with unresolved collection context.")
+
+    def reply(request):
+        sent.append(json.loads(request.content))
+        return httpx2.Response(200, json=response(result.model_dump(mode="json")))
+
+    provider = TerraProvider(Settings(openai_api_key="controlled-test-key"), openai_client(reply))
+    ds = load_example("penguins")
+    interpretation = provider.preparation(preparation_packet(ds, build_preparation(ds)))
+    assert interpretation == result
+    body = sent[0]
+    assert body["store"] is False and body["text"]["format"]["type"] == "json_schema"
+    packet = json.loads(body["input"][0]["content"][0]["text"])
+    assert packet["preparation"]["source_fingerprint"] == ds.record.fingerprint
+    assert any("explicit human review" in v for v in [packet["task"]])
+    assert any("availability cannot be inferred" in v for v in packet["rules"])
+    assert provider.records[0]["response"] == result.model_dump()
+
+
+def test_preparation_jev_support_and_scope_are_atomic_and_do_not_confirm_meaning():
+    from firstlook.preparation import build_preparation
+    from firstlook.preparation_connected import enrich_preparation, reconcile_interpretation
+    from firstlook.preparation_contracts import PreparationInterpretation
+    from firstlook.ingest import from_frame
+    import pandas as pd
+
+    ds = from_frame(pd.DataFrame({"sales": [10, 20, 30]}), "sales.csv")
+    draft = build_preparation(ds, sources={"notes": "Sales is an amount on each row."})
+    draft = reconcile_interpretation(
+        ds,
+        draft,
+        PreparationInterpretation(
+            summary="A proposed row amount.",
+            quantities=[
+                {
+                    "meaning": {"field": "f000", "kind": "flow"},
+                    "reason": "Supplied definition.",
+                    "evidence": [{"source": "notes", "quote": "Sales is an amount on each row."}],
+                }
+            ],
+        ),
+    )
+    sent = []
+
+    def reply(request):
+        sent.append(json.loads(request.content))
+        questions = sent[-1]["questions"]
+        assert len(questions) == 2 and all(q["type"] == "noul" for q in questions.values())
+        return httpx2.Response(
+            200,
+            json={
+                "model": "controlled-jev",
+                "usage": {},
+                "answers": {
+                    k: {"type": "noul", "noul": 0.9 if k.endswith("_support") else 0.5} for k in questions
+                },
+            },
+        )
+
+    provider = JevProvider(Settings(typesafe_api_key="controlled-test-key"), jev_client(reply))
+    result = enrich_preparation(ds, draft, jev=provider)
+    change = next(c for c in result.changes if c.kind == "quantity")
+    assert "unresolved" in change.review and not change.suggested
+    assert not ds.record.semantic_model.meaning("f000").confirmed
+    assert result.records[0]["state"] == sent[0]["state"]
+    assert len(sent) == 1 and result.records[0]["context"] == draft.base_semantics
+
+
 def response(payload):
     return {
         "id": "resp_test",
