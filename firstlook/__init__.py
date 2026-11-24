@@ -1,3 +1,3 @@
-"""First Look: reproducible visual investigation of tabular data."""
+"""First Look v2: understand your data, one good question at a time."""
 
-__version__ = "0.6.0"
+__version__ = "2.0.0"

@@ -1,4 +1,4 @@
-name: Python checks
+name: V2 Python checks
 on: [push, pull_request]
 jobs:
   verify:
@@ -14,4 +14,4 @@ jobs:
       - run: .venv/bin/ruff check .
       - run: .venv/bin/ruff format --check .
       - run: .venv/bin/ty check firstlook app_pages streamlit_app.py
-      - run: .venv/bin/python -m pytest -q
+      - run: .venv/bin/python -m pytest tests -q

@@ -1,261 +1,230 @@
-import io
+"""Independent, small numerical oracles for consequential analytical choices."""
+
+from copy import deepcopy
+from io import BytesIO
 
 import numpy as np
 import pandas as pd
 import pytest
-from hypothesis import given, settings, strategies as st
 
-from firstlook.challenges import challenge, eligible
-from firstlook.contracts import ChartSpec
-from firstlook.discovery import analyze, correlations, discover, plan_for
-from firstlook.examples import load_example
-from firstlook.ingest import InputError, from_frame, load_table
-from firstlook.profiling import profile
-from firstlook.semantics import apply_semantics, semantic_table
-from firstlook.visualization.compiler import compile_chart, selected_rows, validate_chart
+from firstlook.analysis import analyze, compare
+from firstlook.charts import options
+from firstlook.data import load_table, profile, starting_requests
+from firstlook.types import ChoiceRequired, Dataset, Field, Meaning, Request, TimeRule
 
 
-def test_ingestion_missing_zero_duplicate_names():
-    ds = load_table("x,x,名称\n0,NA,a\n,2,b\n3,4,c\n".encode(), "test.csv")
-    assert [f.name for f in ds.record.fields] == ["x", "x", "名称"]
-    assert ds.frame.columns.is_unique
-    assert ds.frame.iloc[0, 0] == 0
-    assert pd.isna(ds.frame.iloc[1, 0])
-    assert ds.frame.iloc[0, 1] == "NA"
+def table(text):
+    return load_table(text.encode(), "my-table.csv")
 
 
-@pytest.mark.parametrize("rows,columns", [(50_001, 1), (2, 81), (0, 2)])
-def test_dimension_guards(rows, columns):
-    with pytest.raises(InputError):
-        from_frame(pd.DataFrame(np.zeros((rows, columns))), "large")
-
-
-def test_upload_bytes_guard():
-    with pytest.raises(InputError, match="25 MiB"):
-        load_table(b"0" * (25 * 1024**2 + 1), "large.csv")
-
-
-def test_parquet_and_nested():
-    out = io.BytesIO()
-    pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", None]}).to_parquet(out)
-    ds = load_table(out.getvalue(), "table.parquet")
-    assert ds.record.rows == 3
-    with pytest.raises(InputError, match="Nested"):
-        from_frame(pd.DataFrame({"a": [{"x": 1}]}), "nested")
-
-
-def test_numerical_oracle():
-    ds = from_frame(pd.DataFrame({"mass": [1.0, 2.0, 3.0, 4.0, np.nan]}), "oracle")
-    p = profile(ds)["fields"]["f000"]
-    assert p["count"] == 4 and p["missing"] == 1
-    assert p["mean"] == 2.5 and p["median"] == 2.5
-    assert p["std"] == pytest.approx(np.sqrt(5 / 3))
-    assert p["quantiles"]["0.25"] == 1.75
-
-
-def test_identifier_rejected_as_measure(dataset):
-    plan = plan_for(dataset.context(), "distribution", ["f000"], "Invalid sum-like measure")
-    with pytest.raises(ValueError, match="identifiers"):
-        analyze(dataset, dataset.context(), plan)
-
-
-def test_semantic_transaction_and_context(dataset):
-    old = dataset.context().id
-    table = semantic_table(dataset)
-    table.loc[table.field == "f001", "role"] = "identifier"
-    changed = apply_semantics(dataset, table)
-    assert changed == ["f001"] and dataset.context().id != old
-    invalid = semantic_table(dataset)
-    invalid.loc[invalid.field == "f003", "role"] = "measure"
-    before = dataset.record.model_dump()
-    with pytest.raises(ValueError):
-        apply_semantics(dataset, invalid)
-    assert dataset.record.model_dump() == before
-
-
-def test_ordinal_order():
-    ds = from_frame(pd.DataFrame({"level": ["low", "high", "mid"] * 20}), "order")
-    table = semantic_table(ds)
-    table.loc[0, "role"] = "ordinal"
-    table.loc[0, "order"] = "low | mid | high"
-    apply_semantics(ds, table)
-    ctx = ds.context()
-    r, _ = analyze(ds, ctx, plan_for(ctx, "frequency", ["f000"], "Frequency"))
-    assert [r["label"] for r in r.records] == ["low", "mid", "high"]
-
-
-def test_zero_variance_is_not_correlation():
-    assert correlations(pd.DataFrame({"x": [1] * 40, "y": range(40)}), "x", "y")["pearson"] is None
-
-
-@settings(deadline=None)
-@given(
-    st.lists(
-        st.floats(min_value=-100, max_value=100, allow_nan=False, allow_infinity=False),
-        min_size=10,
-        max_size=40,
+def test_upload_preserves_exact_values_and_labels_and_rejects_invalid_inputs(monkeypatch):
+    ds = table(
+        "customer_id,big,measure,measure,marker\n001,9007199254740993,1,2,NA\n002,9007199254740994,3,,NULL\n"
     )
-)
-def test_correlation_order_invariance(values):
-    df = pd.DataFrame({"x": values, "y": np.arange(len(values))})
-    original = correlations(df, "x", "y")
-    reversed_ = correlations(df.iloc[::-1], "x", "y")
-    for key in ["pearson", "spearman"]:
-        if original[key] is not None:
-            assert original[key] == pytest.approx(reversed_[key], abs=1e-10)
+    assert ds.frame["f000"].tolist() == ["001", "002"]
+    assert ds.frame["f001"].tolist() == ["9007199254740993", "9007199254740994"]
+    assert ds.field("f001").kind == "identifier"
+    assert ds.label("f002") == "measure (column 3)"
+    assert ds.label("f003") == "measure (column 4)"
+    assert ds.frame["f004"].tolist() == ["NA", "NULL"]
+    assert pd.isna(ds.frame.loc[1, "f003"])
+    explicit = load_table(ds.raw, ds.name, missing_tokens=["NULL"])
+    assert explicit.frame.loc[0, "f004"] == "NA" and pd.isna(explicit.frame.loc[1, "f004"])
+    assert table("value\n1\nuncertain\n").frame["f000"].tolist() == ["1", "uncertain"]
+    packed = BytesIO()
+    pd.DataFrame({"value": [1, 2]}).to_parquet(packed, index=False)
+    assert load_table(packed.getvalue(), "mine.parquet").frame["f000"].tolist() == [1, 2]
+    packed = BytesIO()
+    pd.DataFrame({"big": [9007199254740993, 9007199254740994]}).to_parquet(packed, index=False)
+    exact = load_table(packed.getvalue(), "precise.parquet")
+    assert exact.frame["f000"].tolist() == ["9007199254740993", "9007199254740994"]
+    assert exact.field("f000").kind == "identifier"
+    assert table("value\n1\n\n3\n").field("f000").missing == 1
+    for invalid in [b"", b"PAR1broken", b"a\n"]:
+        with pytest.raises(ValueError):
+            load_table(invalid, "invalid.csv")
+    monkeypatch.setattr("firstlook.data.MAX_BYTES", 5)
+    with pytest.raises(ValueError, match="25 MiB"):
+        load_table(b"value\n1\n", "large.csv")
 
 
-def test_affine_unit_change(dataset):
-    df = dataset.frame[["f001", "f002"]].copy()
-    a = correlations(df, "f001", "f002")
-    df.f001 = df.f001 * 1000 + 10
-    assert correlations(df, "f001", "f002")["pearson"] == pytest.approx(a["pearson"])
-
-
-def test_reversal_challenge(dataset, investigation):
-    f = next(f for f in investigation.findings if f.family == "relationship")
-    c = challenge(dataset, investigation, f, "subgroup")
-    assert c.status == "changed"
-    assert c.result.metrics["pooled"] > 0.7
-    assert all(g["pearson"] < -0.6 for g in c.result.metrics["groups"])
-    assert sum(g["n"] for g in c.result.metrics["groups"]) == 600
-
-
-@pytest.mark.parametrize("op", ["extremes", "rank", "quantile_bin_summary"])
-def test_association_checks(dataset, investigation, op):
-    f = next(f for f in investigation.findings if f.family == "relationship")
-    c = challenge(dataset, investigation, f, op)
-    assert c.result and c.chart
-    compile_chart(c.chart, c.result)
-    if op == "extremes":
-        assert c.result.support < 600
-        assert len(c.result.metadata["excluded_row_ids"]) > 0
-
-
-def test_resampling_requires_assumption(dataset, investigation):
-    f = next(f for f in investigation.findings if f.family == "relationship")
-    assert "resampling" not in eligible(dataset, investigation, f)
-
-
-def test_null_fixture_does_not_invent_signal():
-    inv = discover(load_example("null"))
-    assert not any(f.family == "relationship" for f in inv.findings)
-    assert all(f.claim_type == "descriptive" for f in inv.findings)
-
-
-@pytest.mark.parametrize("key", ["reversal", "penguins", "bike", "null", "nonlinear"])
-def test_every_gallery_chart_compiles(key):
-    ds = load_example(key)
-    inv = discover(ds)
-    assert 0 < len(inv.findings) <= 12
-    for f in inv.findings:
-        assert f.chart.result_id == f.result_id
-        compiled = compile_chart(f.chart, inv.results[f.result_id])
-        assert compiled.options["series"]
-
-
-def test_selection_maps_original_rows(dataset, investigation):
-    f = next(f for f in investigation.findings if f.family == "relationship")
-    compiled = compile_chart(f.chart, investigation.results[f.result_id])
-    ids = selected_rows(
-        {"selection": {"selected": [{"series_index": 0, "data_indices": [2, 4, 999999]}]}},
-        compiled,
-        set(dataset.frame.index),
+def test_full_source_profiles_and_useful_initial_views_include_missingness():
+    ds = table("amount,segment,other\n0,A,\n2,A,\n4,B,\n6,B,\n100,B,\n")
+    facts = profile(ds)
+    assert facts["rows"] == 5 and facts["missing"] == 5
+    assert facts["fields"]["f000"]["mean"] == 22.4
+    assert facts["fields"]["f000"]["median"] == 4
+    assert [r.view for r in starting_requests(ds)] == ["distribution", "categories", "groups"]
+    empty = Dataset(
+        "empty-values",
+        "missing-source",
+        pd.DataFrame({"n": [np.nan, np.nan]}),
+        [Field("n", "Quantity", "number", missing=2)],
     )
-    assert ids == sorted(set(compiled.row_map[0, 2] + compiled.row_map[0, 4]))
-    assert selected_rows({"selection": {"areas": [{}]}}, compiled, set()) == []
+    assert starting_requests(empty)[0].view == "missingness"
+    assert profile(empty)["fields"]["n"]["mean"] is None
+    assert analyze(empty, Request("missingness")).summary["missing_cells"] == 2
 
 
-@pytest.mark.parametrize("change", ["stale", "zero", "log"])
-def test_chart_hard_constraints(dataset, investigation, change):
-    f = next(f for f in investigation.findings if f.chart.template == "histogram")
-    s = f.chart.model_copy(deep=True)
-    if change == "stale":
-        s.context = "wrong"
-    elif change == "zero":
-        s.zero_baseline = False
-    else:
-        s.scale = "log"
-    r = investigation.results[f.result_id]
-    if change == "log":
-        r = r.model_copy(update={"records": [{"x": 1, "value": 0}]})
-    with pytest.raises(ValueError):
-        validate_chart(s, r)
-
-
-@pytest.mark.parametrize("template", ["bar", "dot", "histogram", "ecdf", "scatter", "box", "line", "heatmap"])
-def test_template_contracts(template, dataset):
-    from firstlook.contracts import ResultArtifact
-
-    ctx = dataset.context()
-    plan = plan_for(ctx, "distribution", ["f001"], "View")
-    row = {
-        "x": 1,
-        "y": 2,
-        "label": "A",
-        "value": 3,
-        "min": 1,
-        "q1": 2,
-        "median": 3,
-        "q3": 4,
-        "max": 5,
-        "n": 6,
+def test_histogram_and_quantiles_use_all_nonmissing_source_values():
+    ds = table("value,other\n0,a\n1,b\n2,c\n3,d\n4,e\n,f\n")
+    result = analyze(ds, Request("distribution", "f000"))
+    assert result.summary == {
+        "n": 5,
+        "missing": 1,
+        "min": 0.0,
+        "q1": 1.0,
+        "median": 2.0,
+        "mean": 2.0,
+        "q3": 3.0,
+        "max": 4.0,
     }
-    r = ResultArtifact(id=plan.id, plan=plan, records=[row], support=6)
-    s = ChartSpec(
-        id="view",
-        result_id=r.id,
-        context=ctx.id,
-        template=template,
-        x_label="X",
-        y_label="Y",
-        zero_baseline=template in {"bar", "histogram"},
-        alt="Known data",
+    assert result.omitted == 1 and result.meta["eligible_rows"] == [0, 1, 2, 3, 4]
+    assert sum(r["count"] for r in result.table) == 5
+    assert [r["count"] for r in result.table] == [2, 3]
+    assert sum(r["share"] for r in result.table) == pytest.approx(1)
+    assert result.meta["quantiles"][20] == {"probability": 0.5, "value": 2.0}
+    quantiles = options(ds, analyze(ds, Request("distribution", "f000", representation="quantile")))
+    assert quantiles["series"][0]["data"][20] == [2.0, 0.5]
+    constant = table("quantity\n7\n7\n7\n")
+    assert sum(r["count"] for r in analyze(constant, Request("distribution", "f000")).table) == 3
+
+
+def test_additivity_and_value_grain_are_permissions_with_different_numerical_answers():
+    ds = table("order_id,segment,amount\n001,A,100\n001,A,100\n002,B,60\n")
+    req = Request("categories", "f001", "f002", metric="sum")
+    with pytest.raises(ChoiceRequired, match="can be added"):
+        analyze(ds, req)
+    row_amount = analyze(ds, req, {"f002": Meaning("additive")})
+    entity_amount = analyze(ds, req, {"f002": Meaning("additive", "f000")})
+    assert sum(r["value"] for r in row_amount.table) == 260
+    assert sum(r["value"] for r in entity_amount.table) == 160
+    assert row_amount.context != entity_amount.context
+    with pytest.raises(ChoiceRequired):
+        analyze(ds, req, {"f002": Meaning("nonadditive")})
+    changed = deepcopy(ds)
+    changed.frame.loc[1, "f002"] = 101
+    with pytest.raises(ChoiceRequired, match="varies within"):
+        analyze(changed, req, {"f002": Meaning("additive", "f000")})
+    mean = analyze(ds, Request("categories", "f001", "f002", metric="mean"))
+    assert mean.table[0]["value"] == 100
+    missing_entity = table("order_id,segment,amount\n001,A,100\n,A,30\n")
+    identified = analyze(missing_entity, req, {"f002": Meaning("additive", "f000")})
+    assert identified.table[0]["value"] == 100
+    assert identified.meta["eligible_rows"] == [0] and identified.omitted == 1
+
+
+def test_group_denominators_and_overlapping_entities_require_explicit_attribution():
+    ds = table("order_id,category,amount,exposure\n001,A,100,2\n001,B,100,2\n002,A,60,1\n")
+    counts = analyze(ds, Request("categories", "f001", metric="distinct", entity="f000"))
+    assert {r["label"]: r["share"] for r in counts.table} == {"A": 1.0, "B": 0.5}
+    assert not counts.meta["composition"] and counts.warnings
+    req = Request("categories", "f001", "f002", metric="sum")
+    meanings = {"f002": Meaning("additive", "f000")}
+    with pytest.raises(ChoiceRequired) as blocked:
+        analyze(ds, req, meanings)
+    assert blocked.value.evidence["overlapping_entities"] == 1
+    req.attribution = "equal"
+    shared = analyze(ds, req, meanings)
+    assert {r["label"]: r["value"] for r in shared.table} == {"A": 110.0, "B": 50.0}
+    assert shared.meta["composition"]
+    req.attribution = "full"
+    full = analyze(ds, req, meanings)
+    assert sum(r["value"] for r in full.table) == 260 and not full.meta["composition"]
+    weighted = analyze(ds, Request("categories", "f001", "f002", metric="weighted_mean", weight="f003"))
+    assert next(r["value"] for r in weighted.table if r["label"] == "A") == pytest.approx(260 / 3)
+    invalid = deepcopy(ds)
+    invalid.frame.loc[0, "f003"] = -1
+    with pytest.raises(ValueError, match="nonnegative"):
+        analyze(invalid, weighted.request)
+    missing_group = table("value,segment\n1,A\n,B\n3,A\n")
+    grouped = analyze(missing_group, Request("groups", "f000", group="f001"))
+    absent = [r for r in grouped.table if r["label"] == "B"]
+    assert absent and all(r["n"] == 0 and r["share"] is None for r in absent)
+
+
+def test_relationship_separates_pooled_and_within_group_support_without_changing_source():
+    ds = table("x,y,segment\n1,11,A\n2,12,A\n3,13,A\n10,1,B\n11,2,B\n12,3,B\n,4,B\n")
+    original = ds.frame.copy(deep=True)
+    result = analyze(ds, Request("relationship", "f000", "f001", group="f002"))
+    assert result.summary["n"] == 6 and result.summary["correlation"] < -0.9
+    assert [r["correlation"] for r in result.meta["group_stats"]] == pytest.approx([1, 1])
+    assert result.meta["eligible_rows"] == list(range(6)) and result.omitted == 1
+    assert [r["row"] for r in result.table] == list(range(6))
+    chart = options(ds, result)
+    assert chart["grid"]["width"] == chart["grid"]["height"]
+    assert chart["grid"]["containLabel"] is False
+    assert chart["grid"]["outerBoundsMode"] == "none"
+    pd.testing.assert_frame_equal(ds.frame, original)
+
+
+def test_time_absence_and_recorded_null_are_distinct_and_coverage_is_explicit():
+    ds = table("date,amount\n2025-01-01,5\n2025-01-03,\n2025-01-05,2\n")
+    meanings = {"f001": Meaning("additive")}
+    req = Request("time", "f000", "f001", metric="sum", period="D")
+    recorded = analyze(ds, req, meanings)
+    assert [r["value"] for r in recorded.table] == [5.0, None, None, None, 2.0]
+    assert [r["observed"] for r in recorded.table] == [True, False, True, False, True]
+    req.zero_fill = True
+    with pytest.raises(ChoiceRequired):
+        analyze(ds, req, meanings)
+    rules = {"f000": TimeRule(True, True, "2025-01-04")}
+    filled = analyze(ds, req, meanings, time_rules=rules)
+    assert [r["value"] for r in filled.table] == [5.0, 0, None, 0, 2.0]
+    with pytest.raises(ChoiceRequired):
+        analyze(ds, req, meanings, rows=[0, 2], time_rules=rules)
+    req.period = "MS"
+    partial = analyze(ds, req, meanings, time_rules={"f000": TimeRule(True, True, "2025-02-15")})
+    assert partial.table[-1]["value"] is None, "A partial calendar month is not verified complete."
+    req.zero_fill = False
+    req.period = "D"
+    assert options(ds, analyze(ds, req, meanings))["series"][0]["connectNulls"] is False
+    req.zero_fill, req.representation = True, "calendar"
+    with pytest.raises(ValueError, match="[Cc]alendar|heatmap|phase"):
+        analyze(ds, req, meanings, time_rules=rules)
+
+
+def test_selected_and_reference_are_matched_with_shared_domains_and_fixed_memberships():
+    ds = table("x,y,group\n0,10,A\n1,20,A\n10,30,B\n11,40,B\n")
+    original = ds.frame.copy(deep=True)
+    distribution = compare(ds, Request("distribution", "f000"), [0, 1])
+    assert distribution.selected.rows == [0, 1] and distribution.reference.rows == [2, 3]
+    assert distribution.selected.meta["edges"] == distribution.reference.meta["edges"]
+    assert [r["count"] for r in distribution.selected.table] == [2, 0]
+    assert [r["count"] for r in distribution.reference.table] == [0, 2]
+    unequal = compare(ds, Request("distribution", "f000"), [0])
+    assert unequal.selected.meta["comparison_measure"] == "within-population share"
+    assert unequal.selected.meta["y_bounds"] == unequal.reference.meta["y_bounds"]
+    selected_chart = options(ds, unequal.selected)
+    reference_chart = options(ds, unequal.reference)
+    assert selected_chart["yAxis"]["max"] == reference_chart["yAxis"]["max"]
+    assert [p[1] for p in selected_chart["series"][0]["data"]] == [r["share"] for r in unequal.selected.table]
+    assert [p[1] for p in reference_chart["series"][0]["data"]] == [
+        r["share"] for r in unequal.reference.table
+    ]
+    pairs = compare(ds, Request("relationship", "f000", "f001"), [0, 1])
+    assert pairs.selected.meta["x_bounds"] == pairs.reference.meta["x_bounds"] == [0, 11]
+    assert pairs.selected.meta["y_bounds"] == pairs.reference.meta["y_bounds"] == [10, 40]
+    overlap = compare(ds, Request("distribution", "f000"), [0, 1], reference_rows=[1, 2, 3])
+    assert "overlapping" in overlap.definition
+    pd.testing.assert_frame_equal(ds.frame, original)
+
+
+def test_conditional_representations_preserve_denominators_and_reject_false_composition():
+    ds = table(
+        "order_id,segment,status,amount,other\n001,A,Open,100,2\n001,B,Open,100,4\n002,A,Closed,60,6\n"
     )
-    assert compile_chart(s, r).options["series"][0]["type"] in {
-        "bar",
-        "scatter",
-        "line",
-        "boxplot",
-        "heatmap",
-    }
-
-
-def test_leading_zero_codes_and_parser_settings_change_context():
-    raw = b"code,label\n001,NA\n002,A\n003,B\n"
-    a = load_table(raw, "codes.csv")
-    b = load_table(raw, "codes.csv", missing_tokens=["", "NA"])
-    assert a.frame.iloc[0, 0] == "001"
-    assert a.context().id != b.context().id
-
-
-def test_cumulative_distribution_exact_and_monotone(dataset):
-    result, finding = analyze(
-        dataset, dataset.context(), plan_for(dataset.context(), "ecdf", ["f001"], "Cumulative")
-    )
-    assert finding.chart.template == "ecdf"
-    assert result.records[-1]["value"] == 1.0
-    assert all(a["value"] <= b["value"] for a, b in zip(result.records, result.records[1:]))
-    assert {i for r in result.records for i in r["row_ids"]} == set(range(600))
-
-
-def test_curved_relation_can_survive_a_weak_signed_correlation():
-    ds = load_example("nonlinear")
-    inv = discover(ds)
-    assert abs(correlations(ds.frame, "f001", "f003")["pearson"]) < 0.3
-    assert any(
-        f.family == "quantile_bin_summary" and inv.results[f.result_id].plan.fields == ["f001", "f003"]
-        for f in inv.findings
-    )
-
-
-def test_proposed_numeric_ordinal_order_is_numeric():
-    ds = from_frame(pd.DataFrame({"month": list(range(1, 13)) * 4}), "months")
-    assert ds.field("f000").order == [str(i) for i in range(1, 13)]
-
-
-def test_empty_semantic_unit_stays_unknown(dataset):
-    table = semantic_table(dataset)
-    table.loc[table.field == "f001", "unit"] = None
-    apply_semantics(dataset, table)
-    assert dataset.field("f001").unit == ""
+    small = analyze(ds, Request("category_relationship", "f001", "f002", representation="share"))
+    for group in ["A", "B"]:
+        assert sum(r["share"] for r in small.table if r["group"] == group) == pytest.approx(1)
+    assert all(a["max"] == 1 for a in options(ds, small)["xAxis"])
+    counts = analyze(ds, Request("categories", "f001", representation="treemap"))
+    assert sum(r["value"] for r in options(ds, counts)["series"][0]["data"]) == 3
+    with pytest.raises(ValueError, match="partition"):
+        incidence = analyze(
+            ds, Request("categories", "f001", metric="distinct", entity="f000", representation="treemap")
+        )
+        options(ds, incidence)
+    ranked = analyze(ds, Request("multivariate", group="f001", fields=["f003", "f004"], metric="mean"))
+    assert [r["label"] for r in ranked.table] == ["B", "A"]
+    assert len(options(ds, ranked)["series"]) == 2

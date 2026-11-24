@@ -1,29 +1,51 @@
-# Deployment
+# Deploying First Look v2
 
-Run and deploy from the repository root. Streamlit Community Cloud reads the root `.streamlit/config.toml`; keeping the runtime there avoids configuration and asset-path surprises. Research and session notes are not imported by the application.
+The application runs from the repository root. It needs Python 3.12, server-side Python packages and Streamlit; no separate service, Node build, GPU or persistent database is required.
 
-## Community Cloud
+## Streamlit Community Cloud
 
-1. Put this repository in your GitHub account, keeping `streamlit_app.py`, `requirements.txt`, `requirements-lock.txt`, `.streamlit/config.toml`, `static/`, `resources/` and `examples/` together at repository root.
-2. Create a Community Cloud app from that repository. Entrypoint: **`streamlit_app.py`**. Select **Python 3.12** under advanced settings.
-3. Deploy with no secrets to verify the local workflow. Add the owner credentials in Cloud Secrets when ready.
-4. Keep the agent API disabled in production; the checked-in config does not enable it. No separate service, Node build or persistent disk is required.
+1. Put this repository in your GitHub account. Create an app at [share.streamlit.io](https://share.streamlit.io/) using the intended repository and branch.
+2. Set the entrypoint to **`streamlit_app.py`** and Python to **3.12** in advanced settings. Keep root `requirements.txt`, `requirements-lock.txt`, `.streamlit/config.toml` and `static/` intact.
+3. Deploy. Without keys, upload, profiling, views, comparisons, local predictive references and records work locally in the server process.
+4. Add the owner credentials to **App settings → Secrets** when ready. Paste the structure below or use the checked-in [placeholder file](../.streamlit/secrets.toml.example). Save and restart as prompted.
+5. Verify the welcome screen, three destinations (**Data, Investigate, Record**) and sidebar release **First Look 2.0.0** after upload. A source link alone does not establish which release a running process has loaded.
 
-A restart can end in-memory investigations or workers. Download bundles to preserve evidence. This is a shared open-source workbench with bounded concurrency; if the owner wants tighter public API spending controls, set `allow_external_analysis=false` or `provider_mode="offline"` and enable connected work in a controlled deployment.
+The repository can be deployed directly. The archived V1 tree is not imported, discovered by active tests or installed as an application. For a runtime-only handoff, copy `streamlit_app.py`, `app_pages/`, `firstlook/`, `.streamlit/config.toml`, `.streamlit/secrets.toml.example`, `static/`, `requirements.txt`, `requirements-lock.txt`, `LICENSE` and `THIRD_PARTY_NOTICES.md`. Do not copy actual secrets. V1 packaging scripts remain historical and are not a V2 release command.
 
-### Confirming a deployed update
+Keep Streamlit's agent API disabled in production. It is useful only for explicit local development review. Session memory is temporary: Cloud sleep, reboot or replacement can discard uploads, work and worker results. Ask users to download evidence they want to keep.
 
-GitHub `main` and a passing CI run do not establish the code loaded by an existing Cloud process. In **About this workbench** in the sidebar, this release identifies itself as **First Look 0.6.0**, **Chart renderer: 2026-11-23.1**, **Judgment policy: 2026-11-24.1**, **Task policy: 2026-11-24.2** and **Preparation policy: 2026-11-24.1**. The renderer marker is read from the loaded compiler module; an older imported module reports that a reboot is required. A missing marker means the entrypoint itself predates this diagnostic.
+If Cloud has not loaded an update, preserve any work, check repository/branch/entrypoint and build logs, then use the owner dashboard's **Reboot app** action. An ordinary browser refresh cannot force a new server build. Follow [Streamlit's reboot guidance](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/reboot-your-app).
 
-If the source button links to this repository's `main` but the app still shows older charts, preserve any work and use the owner workspace at `share.streamlit.io` → the app's overflow menu → **Reboot**. Alternatively use **Manage app → overflow menu → Reboot app**. A browser refresh or ordinary script rerun does not force a fresh server build. Follow the [official reboot instructions](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/reboot-your-app).
+## Configure the services
 
-After rebooting, check the sidebar markers and start a fresh local Penguins investigation. The navigation includes **Preparation**, **Text lab**, **Event lab** and **Judgments**. Understand shows the prepared overview; Preparation supports related-definition review, context input and reusable templates. Connected preparation only runs after its explicit per-dataset option is enabled. Meaning includes Task & availability; Models shows readiness before fitting. Asking a question in Findings shows an interpretation before its explicit execution. Scatterplots should have square inner axes, rotated y-axis titles and declared units in their axis labels. Their safeguards include the square-scatter rule. If the markers are still absent, check the deployed repository, branch, entrypoint and Cloud build logs before changing chart dimensions.
+All three integrations are optional and independent. V2 keeps the existing owner secret names. Do not place keys in Python source, browser storage or visitor-editable state. There is no visitor BYO-key flow.
 
-Count versus percentage is a separate analytical choice: single-population histograms/frequencies currently default to recorded row counts. Two-group frequency polygons use within-group proportions so unequal sample sizes do not dominate shape comparisons. Existing proportions are not raw counts labelled as percentages. Changing this default requires an explicit normalisation choice and recorded denominator, not merely appending a percent sign.
+### 1. Terra through OpenAI
 
-## Owner credentials
+1. Open the [OpenAI API platform](https://platform.openai.com/), choose or create a project, and enable billing for that project.
+2. Create a dedicated API key with the permissions needed for Responses requests. Copy it directly into the `openai_api_key` secret below.
+3. Set `openai_model` to the Terra model identifier available to your account. The current application default is `gpt-6.1-terra`; model access is account-dependent. `openai_reasoning_effort` defaults to `medium`.
+4. Set project budgets, alerts and available model/rate restrictions. Check whether a budget is a warning or a hard cutoff; do not assume an alert stops spending.
 
-Copy `.streamlit/secrets.toml.example` to **`.streamlit/secrets.toml`** for local use, or paste its contents into **Community Cloud → App settings → Secrets**. The example contains placeholders only; placeholders never enable a provider.
+Terra receives field summaries, supplied question/context, the bounded active result table and allowed next-view candidates. If `terra_visual_review=true`, a supported view can include one offscreen analytical PNG with its matching table. This is an analytical rendering, not a screenshot of the app. Free-text column values and default identifier examples are omitted; deliberately selected result labels can still identify people or entities. Terra returns unconfirmed interpretations and hypotheses, not new verified measurements.
+
+### 2. Jev through TypeSafe
+
+1. Create or open your [TypeSafe account](https://typesafe.ai/) and obtain a service API key from its account/dashboard tooling.
+2. Put the key in `typesafe_api_key`. Use `typesafe_model="jev-latest"` unless your account requires another available model identifier.
+3. Configure the provider's available quota and request/spending controls for this application.
+
+Jev receives a bounded evidence packet and explicit narrow judgment questions about relevance or support. Python retains the distinction between yes, no, uncertain and failed. A favorable judgment never confirms a business definition or grants aggregation permission. Jev and Terra can be enabled separately.
+
+### 3. Hosted TabPFN through Prior Labs
+
+1. Create or open a [Prior Labs account](https://priorlabs.ai/) and obtain the hosted TabPFN access token supplied by its API/client onboarding.
+2. Put the token in `tabpfn_token`. Keep `tabpfn_model_path="auto"` unless your account's documented model access requires another value.
+3. Configure available usage controls for this account. No local foundation-model weights or GPU are required.
+
+The predictive check is explicitly requested, not run on upload. Local reference and linear/logistic baselines work without hosted access. Hosted fitting receives training predictors and labels; prediction receives held-out predictors. Held-out labels stay local for scoring. Only use it for a question where a retrospective predictive diagnostic is useful.
+
+### Secrets structure
 
 ```toml
 [providers]
@@ -41,33 +63,25 @@ allow_external_analysis = true
 terra_visual_review = true
 ```
 
-Environment variables override provider secrets: `TYPESAFE_API_KEY`, `TYPESAFE_MODEL`, `TABPFN_TOKEN`, `TABPFN_MODEL_PATH`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT`. `FIRSTLOOK_PROVIDER_MODE=offline` disables every provider even if keys exist. `auto` and `live` make configured integrations available; execution still requires an explicit action and the dataset’s **Allow external analysis** choice. There are no visitor API-key widgets or mutable per-visitor provider credentials.
+Placeholder strings do not enable an integration. For local use copy the example to `.streamlit/secrets.toml`, which is ignored by Git. Environment variables override the corresponding provider secrets:
 
-In the app, open **Understand → Investigation settings → Allow external analysis for this dataset**. To request a connected pass after the local overview, use **Findings → Investigation options → Investigate with connected models**. The sidebar reports configured credentials; it does not establish successful authentication. Models provides the separate hosted TabPFN evaluation controls.
+| Secret | Environment variable |
+| --- | --- |
+| `openai_api_key` | `OPENAI_API_KEY` |
+| `openai_model` | `OPENAI_MODEL` |
+| `openai_reasoning_effort` | `OPENAI_REASONING_EFFORT` |
+| `typesafe_api_key` | `TYPESAFE_API_KEY` |
+| `typesafe_model` | `TYPESAFE_MODEL` |
+| `tabpfn_token` | `TABPFN_TOKEN` |
+| `tabpfn_model_path` | `TABPFN_MODEL_PATH` |
+| `[app].provider_mode` | `FIRSTLOOK_PROVIDER_MODE` |
 
-| Component | Receives | Responsibility |
-| --- | --- | --- |
-| Local Python | Source table and user corrections | Profiles, eligibility, statistics, splits, metrics, chart contracts and checks |
-| Jev / TypeSafe | Task-specific metadata, eligible candidates and criteria; source text only after separate text permission | Atomic applicability, intent, relevance, note-evidence, text-coding and claim support/scope judgments; Python owns decisions and permissions |
-| Hosted TabPFN | Permitted training values/labels and held-out predictors | Predictions under the recorded split; no local weights or GPU |
-| Terra / OpenAI Responses | Field summaries, bounded plotting tables, chart contracts and up to three matched chart images; optional eight text-only examples without target values | Suggest questions, propose eligible checks and frozen text-feature definitions, reconcile computed evidence; no code execution |
+`FIRSTLOOK_PROVIDER_MODE=offline` disables every provider even when credentials exist. `auto` and `live` make configured integrations available; they do not trigger automatic work. `[app].allow_external_analysis=false` is the owner-wide off switch. `terra_visual_review=false` disables analytical images while preserving text/table assistance.
 
-Terra’s images are generated **offscreen from analytical contracts**. They are not screenshots of the app. The text-only comparison receives identical underlying plotting data. Model prose is labeled interpretation; unverified numerical or causal assertions are omitted. Evidence exports record requested/resolved models, packets, usage, decisions, rejected proposals and asset hashes. Provider data retention follows the configured service/account; `store=False` is sent to OpenAI, not a promise about every provider’s retention.
+## What the visitor does
 
-Use dedicated provider keys/projects for this public app and provider-enforced spending/request caps. Verify whether each limit is a hard cutoff or an alert. Visitors can consume the configured account quota without seeing its key. Per-session limits do not impose a global monthly spending cap.
+In **Investigate**, the visitor enables **Allow connected assistance for this table**, reviews the sharing explanation and explicitly requests **Think this through with me**. The same permission is required before including hosted predictions in a predictive check. Uploading, navigating and ordinary reruns never trigger a paid provider request. A missing/failed service preserves local work.
 
-No additional keys are needed for the new workflows. Text lab requires both dataset external-analysis permission and its separate **Allow sharing this dataset's selected text** checkbox. The page previews rows, questions and request/input bounds before coding. Limits are six frozen features, 240 rows, 2,000 characters per text, two coding experiments and two matched model experiments per context. Empty, overlong and unresolved rows are reported separately. Standard Jev jobs allow at most eight requests, 256 questions and 384,000 conservative input-budget bytes; text coding has a separate maximum of 64 requests, 1,440 questions and 2,000,000 input-budget bytes. Every request is additionally bounded to 40 questions and 48,000 serialized-input bytes. These are application guardrails, not provider billing quotes or global spending limits. See [analytical conventions](../docs/ANALYTICAL_CONVENTIONS.md).
+Limits are four distinct assistance requests and one predictive experiment per uploaded working dataset. Changing meanings or ordinary controls does not replenish them. One assistance request can use both configured reasoning/judgment services; it is not a one-call billing promise. Hosted TabPFN adds a fit/predict protocol to the one diagnostic. These session limits limit accidental repeats; **they are not a global spending cap**. Visitors can consume the owner's quota without seeing its keys. Use dedicated provider accounts/projects, provider-enforced limits and the owner-wide off switch as appropriate.
 
-You can inspect the Judgments library, local question routing and labelled baseline without keys. Live calibration remains a separate, explicitly authorized development step: `python -m scripts.evaluate_judgments --live --allow-paid-requests` sends up to seven bounded example requests. Ordinary inspection and evidence replay make no provider calls.
-
-Event lab preparation and its local baselines need no new keys or runtime packages. Hosted evaluation uses the existing TabPFN credential and dataset permission, after a successful deterministic preflight. It permits two preparations and two model evaluations per context, with one final evaluation per frozen task. Derived tables contain entity keys, history and outcomes; exported evidence can include them even without original-file inclusion. Data remains session-scoped and downloadable; Community Cloud restarts can discard it. Keep the production agent API disabled.
-
-Keys belong in Cloud Secrets, not source code, browser storage or frontend session variables. The application uses one owner credential set; BYO visitor credentials are not enabled. Keep actual `.streamlit/secrets.toml` and `.env` files out of Git.
-
-## Clean deployment artifact
-
-```bash
-python -m scripts.package_deployment
-```
-
-This creates `dist/first-look-deployment.zip` containing only application code, runtime requirements, configuration, licensed assets, notices and a checksum manifest. It excludes development tools, research, working context, generated reports, caches and actual secrets. Extract and run from the archive root. The regular GitHub repository can be deployed directly; the artifact is an optional runtime-only handoff.
+The app sends `store=False` to OpenAI. Data retention, billing and service terms remain those of each configured provider/account. Recorded evidence can retain bounded provider inputs, responses and predictions; a source-free export can still contain sensitive values. See [analytical conventions](../docs/ANALYTICAL_CONVENTIONS.md) and [record inspection](../docs/REPLAY.md).

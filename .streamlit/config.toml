@@ -6,6 +6,9 @@ maxUploadSize = 25
 [browser]
 gatherUsageStats = false
 
+[client]
+toolbarMode = "viewer"
+
 [theme]
 base = "light"
 font = "Plex Sans"
@@ -39,7 +42,7 @@ weight = 400
 
 [theme.light]
 primaryColor = "#3157CE"
-backgroundColor = "#FFFFFF"
+backgroundColor = "#FCFCFA"
 secondaryBackgroundColor = "#F3F5F9"
 textColor = "#152239"
 linkColor = "#244BB8"

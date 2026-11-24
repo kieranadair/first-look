@@ -1,7 +1,7 @@
 [project]
 name = "firstlook"
-version = "0.6.0"
-description = "Discover, challenge and preserve a first understanding of tabular data."
+version = "2.0.0"
+description = "Investigate your data and preserve an understanding you can explain."
 requires-python = ">=3.12"
 
 [tool.pytest.ini_options]
@@ -11,7 +11,7 @@ filterwarnings = ["error::RuntimeWarning"]
 
 [tool.ruff]
 line-length = 110
-exclude = [".venv", ".git", ".agents/skills", "scratch", "dist", "build"]
+exclude = [".venv", ".git", ".agents/skills", "scratch", "dist", "build", "archive"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]

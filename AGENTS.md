@@ -1,20 +1,12 @@
-# Contributor and agent guidance
+# First Look v2 contributor guide
 
-First Look is a Python-only open-source Streamlit visual investigation app. Read `docs/development/CONTEXT.md` first for current status. Use `docs/development/README.md` for commands and `deployment/README.md` for deployment. The longer original specification is design history, not a requirement to repeat completed work.
+Read `docs/v2/SPECIFICATION.md`, `PLAN.md` and `TESTS.md`. Purpose: help people investigate their own data, see consequential choices and explain what evidence supports. Three destinations: Data, Investigate, Record. No demo gallery or feature itinerary.
 
-- Keep the deployable application and Streamlit configuration at repository root. Deployment assets are explicitly allowlisted in `scripts/package_deployment.py`.
-- Put research and bibliographic material under `docs/research/`; implementation context and historical validation under `docs/development/`. Generated reports belong in ignored `reports/`.
-- Use the installed official Streamlit skill at `.agents/skills/developing-with-streamlit/SKILL.md` for Streamlit changes, discovering version-matched references in the installed package.
-- Use the installed TypeSafe skill at `.agents/skills/typesafe-ai/SKILL.md` for Jev/TypeSafe integration work, question/state/criteria design, and integration reviews. Consult its live documentation for current API/SDK behaviour. Keep model judgments atomic and execution decisions in Python; preserve this project's semantic permissions and recorded evidence. Installation provenance is in `skills-lock.json`.
-- Prior Labs' official relational-prediction skill at `.agents/skills/relational-prediction/SKILL.md` is reference material. The user asked us to reason over its useful components, rather than execute its agent workflow. First Look uses its own task contracts, finite Python event recipes, hosted-client constraints and recorded evidence; do not install the skill's optional runtime stack or add arbitrary SQL. Provenance is in `skills-lock.json`.
-- Preserve Python-only application/tests, native UI and explicit analytical contracts. The user authorized screenshots for UI review on 23 November 2026, superseding the earlier screenshot prohibition. Do not add a custom JavaScript/CSS frontend or create a user-testing/approval gate. Keep captures of bundled examples in ignored reports, not committed user data.
-- Owner API keys come from Cloud Secrets/environment variables. Visitors do not enter keys. Never commit real keys, `.env`, uploaded user data or live provider transcripts.
-- Preserve role validation, context identity, held-out memberships and deterministic evidence. Models propose/prioritize; Python computes and validates. No generated code executes.
-- No live provider or productivity claims without actual evidence. The owner reports Cloud keys configured; local credentials and live verification are not assumed. Provider budgets are bounded per investigation, not a global spend cap.
-- Run appropriate tests, lint and type checks. UI interaction can be tested through AppTest, the development agent API and screenshot-free Python browser assertions. Do not enable the agent API in production.
-
-Semantic-contract work: use `firstlook/semantic/model.py` for atomic declarations and validation. Preserve exact dataset and parsing scope, context invalidation, explicit denominator/value grain and scoped observation coverage. Models rank/propose; they do not bypass operation eligibility or confirm business meaning. Add independent numerical oracles when extending the metric algebra. The shared semantic packet and evidence format must stay aligned with execution.
-
-Task-validity work: `firstlook/analytical_tasks.py` stores typed task/availability declarations under existing semantic metadata. Keep preflight and fitting on the shared `model_protocol.prepare_model` path, train-only target-dependent screens, and decision-time-bound availability. `event_tasks.py` owns finite past-feature/forward-label recipes; unassignable events cannot become silent negatives and unknown availability does not erase observed outcomes. Preserve original source memberships, exact final-anchor holdout, legacy inference recipe replay and data-free inspection. See `docs/development/task-validity-uplift.md`.
-
-Preparation work: read `docs/development/preparation-uplift.md` and its plan. Drafts never grant permissions. Keep dependency-aware atomic application, per-subject stale guards, exact source/parser scope, bounded session requests and explicit dataset sharing. Reusable templates are proposals, never a transfer of coverage or historical availability. Preserve evidence/privacy marking and immediate local exploration while preparation owns the worker slot.
+- Fresh Python-only Streamlit implementation. `archive/v1/` is reference only; never import it into v2. Its tests/docs are historical, not the active specification.
+- Keep immutable source, stable identities, explicit grain/denominators, honest missingness, comparable views and immutable saved records. Unknown meaning is not permission. Models suggest; Python calculates; people own interpretation.
+- Use the installed Streamlit skill/version-matched references for UI and `.agents/skills/typesafe-ai/SKILL.md` for Jev work. Skills do not imply product features.
+- Owner Cloud Secrets/environment names remain compatible. No real keys, uploaded data or live provider transcripts in git. No automatic paid requests on upload/rerun. Offline work remains useful.
+- Prediction is one explicit retrospective diagnostic, fixed memberships and train-only preparation. No held-out labels reach hosted fitting. No generated code executes.
+- Test the 18 essential behaviours in TESTS.md; add only for distinct risks. Archive is excluded from active lint/types/tests/deployment.
+- Native Streamlit/ECharts and licensed typography own the UI. No custom JS/CSS frontend. Screenshots are authorized locally; keep reports ignored. No user-testing gate or unmeasured productivity claims.
+- V2 spec is current; earlier research mappings remain in `archive/v1/docs/research/`.
