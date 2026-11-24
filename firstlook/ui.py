@@ -21,6 +21,7 @@ from firstlook.providers import assist_view, build_packet, settings_from
 from firstlook.session import Session
 from firstlook.types import (
     ChoiceRequired,
+    Comparison,
     Field,
     Meaning,
     Metric,
@@ -244,7 +245,7 @@ def data_page():
     st.markdown(
         "I’ve made a first view of the recorded data. Follow something that interests you; we’ll refine its meaning when it matters."
     )
-    context, preview = st.columns([1, 1.45], gap="large")
+    context, preview, perspective = st.columns([1, 1.65, 1], gap="large")
     with context:
         _context_form(state, "data")
         if st.button("Let’s explore", type="primary", key="start_exploring", icon=":material/arrow_forward:"):
@@ -255,8 +256,9 @@ def data_page():
             _open_file(state)
     with preview:
         if state.current:
-            draw(state.ds, state.current, "first_view", height=350)
-            assistance_controls(state)
+            draw(state.ds, state.current, "first_view", height=400)
+    with perspective:
+        assistance_controls(state)
     st.subheader("A little orientation")
     st.caption(
         "Fields describe what was recorded. Their names and patterns are clues; your knowledge gives them meaning."
@@ -327,7 +329,7 @@ def draw(ds, result, key, height=400, comparison=None, compact=False):
         chart, context = st.columns([1.1, 1], gap="large")
         with chart:
             st.echarts_chart(
-                options(ds, result, comparison), height=470, key=key, alt=title_for(ds, result.request)
+                options(ds, result, comparison), height=540, key=key, alt=title_for(ds, result.request)
             )
         with context:
             st.space("small")
@@ -353,12 +355,13 @@ def draw(ds, result, key, height=400, comparison=None, compact=False):
             )
     else:
         if result.request.view == "category_relationship":
-            height = max(height, 140 + 22 * len(result.meta["categories"])) * (
-                (len(result.meta["groups"]) + 2) // 3
-            )
+            from firstlook.perspectives import categorical_layout
+
+            _, rows, row_height = categorical_layout(result)
+            height = rows * row_height
         st.echarts_chart(
             options(ds, result, comparison),
-            height=max(height, 470) if result.request.view == "relationship" else height,
+            height=max(height, 540) if result.request.view == "relationship" else height,
             key=key,
             alt=title_for(ds, result.request),
         )
@@ -366,6 +369,20 @@ def draw(ds, result, key, height=400, comparison=None, compact=False):
     st.caption(f"{len(result.rows):,} records in scope · {result.omitted:,} omitted from this calculation")
     for warning in result.warnings:
         st.caption(warning)
+
+
+def draw_comparison(ds, comparison, key):
+    """Keep a matched pair together within the desktop investigation canvas."""
+    st.caption(comparison.definition)
+    left, right = st.columns(2, gap="medium")
+    for column, name, label in [
+        (left, "selected", "YOUR SELECTED GROUP"),
+        (right, "reference", "THE REFERENCE"),
+    ]:
+        part = getattr(comparison, name)
+        with column:
+            st.caption(label)
+            draw(ds, part, key + "_" + name + "_" + part.id, compact=True)
 
 
 def _candidate_requests(state):
@@ -482,11 +499,19 @@ def view_controls(state):
                 )
         with row[1]:
             if view in {"relationship", "spatial", "category_relationship"}:
-                other = [f for f in (cats if view == "category_relationship" else nums) if f != x]
+                # Form options/defaults must stay stable while batched inputs are
+                # submitted. Filtering by the newly submitted x resets y's widget.
+                other = cats if view == "category_relationship" else nums
+                initial_x = current.x if current.x in fields else fields[0]
+                initial_y = (
+                    current.y
+                    if current.y in other and current.y != initial_x
+                    else next(f for f in other if f != initial_x)
+                )
                 y = st.selectbox(
                     "Alongside",
                     other,
-                    index=other.index(current.y) if current.y in other else 0,
+                    index=other.index(initial_y),
                     format_func=ds.label,
                 )
             elif view == "groups":
@@ -508,6 +533,7 @@ def view_controls(state):
                 group = st.selectbox(
                     "Compare profiles by",
                     [None] + cats,
+                    index=([None] + cats).index(current.group) if current.group in cats else 0,
                     format_func=lambda v: "Individual complete records" if v is None else ds.label(v),
                 )
         with row[2]:
@@ -515,6 +541,7 @@ def view_controls(state):
                 group = st.selectbox(
                     "Colour by",
                     [None] + cats,
+                    index=([None] + cats).index(current.group) if current.group in cats else 0,
                     format_func=lambda v: "All recorded pairs" if v is None else ds.label(v),
                 )
             if view == "time":
@@ -837,83 +864,69 @@ def investigate_page():
     meaning_choice(state)
     if state.current is None and not st.session_state.get("waiting"):
         run_request(state, state.last_request or starting_requests(state.ds)[0])
-    if state.current:
-        if state.comparison:
-            st.caption(state.comparison.definition)
-            left, right = st.columns(2, gap="medium")
-            with left:
-                st.caption("YOUR SELECTED GROUP")
-                draw(
-                    state.ds,
-                    state.comparison.selected,
-                    "selected_" + state.comparison.selected.id,
-                    compact=True,
-                )
-            with right:
-                st.caption("THE REFERENCE")
-                draw(
-                    state.ds,
-                    state.comparison.reference,
-                    "reference_" + state.comparison.reference.id,
-                    compact=True,
-                )
-        else:
-            draw(state.ds, state.current, "view_" + state.current.id)
-        with st.container(horizontal=True, gap="small"):
-            if st.button("Keep this view", icon=":material/bookmark:", key="keep_view"):
-                state.save_result()
-                st.session_state.notice = (
-                    "Kept with its definition. You can add your interpretation in Record."
-                )
-                st.rerun()
-            with st.popover("Exact values", icon=":material/table:"):
-                values = state.current.meta.get(
-                    "plotted_values",
-                    state.current.meta.get(
-                        "calendar_cells",
-                        state.current.meta.get("quantiles")
-                        if state.current.request.representation == "quantile"
-                        else state.current.table,
-                    ),
-                )
-                display = pd.DataFrame(values).drop(columns=["rows"], errors="ignore")
-                if "row" in display:
-                    display["row"] += 1
-                display = display.rename(
-                    columns={
-                        **{f.id: state.ds.label(f.id) for f in state.ds.fields},
-                        "row": "Record position",
-                    }
-                )
-                st.dataframe(display, hide_index=True, alt="Calculated values supporting this view")
-                if state.current.meta.get("support"):
-                    st.caption("Nonmissing support for each quantity and group")
-                    st.dataframe(
-                        pd.DataFrame(state.current.meta["support"]).rename(
-                            columns={f.id: state.ds.label(f.id) for f in state.ds.fields}
-                        ),
-                        hide_index=True,
-                        alt="Separate support behind each ranked numerical summary",
+    canvas, companion = st.columns([2.9, 1], gap="large")
+    with canvas:
+        if state.current:
+            if state.comparison:
+                draw_comparison(state.ds, state.comparison, "active")
+            else:
+                draw(state.ds, state.current, "view_" + state.current.id)
+            with st.container(horizontal=True, gap="small"):
+                if st.button("Keep this view", icon=":material/bookmark:", key="keep_view"):
+                    state.save_result()
+                    st.session_state.notice = (
+                        "Kept with its definition. You can add your interpretation in Record."
                     )
-            if state.comparison and st.button("Return to the whole view", key="clear_comparison"):
-                state.comparison = None
-                state.assistance = {}
-                st.rerun()
-        guidance = {
-            "distribution": "A typical value is only part of the story. Look at spread, gaps and the tails before comparing averages.",
-            "categories": "A count, a contribution and an average answer different questions. Keep the denominator in mind.",
-            "groups": "Look beyond the average. Groups can have similar centres and very different shapes.",
-            "relationship": "A pooled pattern can change within groups. Try a relevant grouping before interpreting it.",
-            "time": "An absent period is not automatically a zero. The recording process matters.",
-            "missingness": "Missing information may follow a pattern. It does not, by itself, tell us why it is missing.",
-            "category_relationship": "Compare the same category across panels. Within-group shares answer a different question from counts.",
-            "spatial": "A geographic pattern is useful when location matters to the question. Uneven sampling can create apparent clusters.",
-            "multivariate": "Follow one pattern across the axes. Each quantity has its own units; similar shapes are a reason to investigate, not a verified grouping.",
-        }
-        st.caption(guidance[state.current.request.view])
-        comparison_controls(state)
-    assistance_controls(state)
-    prediction_controls(state)
+                    st.rerun()
+                with st.popover("Exact values", icon=":material/table:"):
+                    values = state.current.meta.get(
+                        "plotted_values",
+                        state.current.meta.get(
+                            "calendar_cells",
+                            state.current.meta.get("quantiles")
+                            if state.current.request.representation == "quantile"
+                            else state.current.table,
+                        ),
+                    )
+                    display = pd.DataFrame(values).drop(columns=["rows"], errors="ignore")
+                    if "row" in display:
+                        display["row"] += 1
+                    display = display.rename(
+                        columns={
+                            **{f.id: state.ds.label(f.id) for f in state.ds.fields},
+                            "row": "Record position",
+                        }
+                    )
+                    st.dataframe(display, hide_index=True, alt="Calculated values supporting this view")
+                    if state.current.meta.get("support"):
+                        st.caption("Nonmissing support for each quantity and group")
+                        st.dataframe(
+                            pd.DataFrame(state.current.meta["support"]).rename(
+                                columns={f.id: state.ds.label(f.id) for f in state.ds.fields}
+                            ),
+                            hide_index=True,
+                            alt="Separate support behind each ranked numerical summary",
+                        )
+                if state.comparison and st.button("Return to the whole view", key="clear_comparison"):
+                    state.comparison = None
+                    state.assistance = {}
+                    st.rerun()
+            guidance = {
+                "distribution": "A typical value is only part of the story. Look at spread, gaps and the tails before comparing averages.",
+                "categories": "A count, a contribution and an average answer different questions. Keep the denominator in mind.",
+                "groups": "Look beyond the average. Groups can have similar centres and very different shapes.",
+                "relationship": "A pooled pattern can change within groups. Try a relevant grouping before interpreting it.",
+                "time": "An absent period is not automatically a zero. The recording process matters.",
+                "missingness": "Missing information may follow a pattern. It does not, by itself, tell us why it is missing.",
+                "category_relationship": "Compare the same category across panels. Within-group shares answer a different question from counts.",
+                "spatial": "A geographic pattern is useful when location matters to the question. Uneven sampling can create apparent clusters.",
+                "multivariate": "Follow one pattern across the axes. Each quantity has its own units; similar shapes are a reason to investigate, not a verified grouping.",
+            }
+            st.caption(guidance[state.current.request.view])
+            comparison_controls(state)
+    with companion:
+        assistance_controls(state)
+        prediction_controls(state)
 
 
 def comparison_controls(state):
@@ -1017,9 +1030,7 @@ def assistance_controls(state):
     ensure_assistance(state)
     with st.container(border=True):
         st.markdown("**A perspective alongside your evidence**")
-        st.caption(
-            "Jev and Terra connect the recorded evidence with your question and suggest useful next steps. Their interpretations remain yours to question."
-        )
+        st.caption("Jev and Terra review this evidence in the context of your question.")
         if st.session_state.get("work", {}).get("kind") == "assistance":
             st.caption(
                 "Reviewing this view and its context… You can keep exploring."
@@ -1033,16 +1044,19 @@ def assistance_controls(state):
                 st.caption("A model interpretation of the supplied evidence—not a confirmed conclusion.")
             if answer.get("clarification"):
                 st.markdown("**A question to consider:** " + answer["clarification"])
-                st.caption(
-                    "You can add your answer under ‘Question and context’. I’ll use it in the next review."
-                )
-            for hypothesis in answer.get("hypotheses", []):
-                st.caption(
-                    "Unconfirmed meaning for "
-                    + state.ds.label(hypothesis["field"])
-                    + ": "
-                    + hypothesis["reason"]
-                )
+                st.caption("Your question and notes guide the next review.")
+            if answer.get("hypotheses"):
+                with st.popover("Possible field meanings", icon=":material/help_outline:"):
+                    st.caption(
+                        "Unconfirmed hypotheses. Review these when a field’s meaning matters to your question; they do not authorize an aggregation."
+                    )
+                    for hypothesis in answer.get("hypotheses", []):
+                        st.caption(
+                            "Unconfirmed meaning for "
+                            + state.ds.label(hypothesis["field"])
+                            + ": "
+                            + hypothesis["reason"]
+                        )
             for suggestion in answer.get("suggestions", []):
                 judgment = next(
                     (j for j in answer.get("judgments", []) if j.get("candidate") == suggestion["id"]), None
@@ -1182,90 +1196,95 @@ def record_page():
     )
     if state.ds:
         _scope(state)
-        if state.record:
-            ids = [r["id"] for r in state.record]
-            chosen = st.selectbox(
-                "A view in your record",
-                ids,
-                format_func=lambda v: next(
-                    title_for(state.ds, Request(**r["result"]["request"]))
-                    for r in state.record
-                    if r["id"] == v
-                ),
-                key="saved_view",
-            )
-            saved = next(r for r in state.record if r["id"] == chosen)
-            result = _recorded_result(saved["result"])
-            saved_ds = replace(state.ds, fields=[Field(**f) for f in saved["fields"]])
-            if saved.get("comparison"):
-                left, right = st.columns(2, gap="medium")
-                for column, name, label in [
-                    (left, "selected", "YOUR SELECTED GROUP"),
-                    (right, "reference", "THE REFERENCE"),
-                ]:
-                    raw = saved["comparison"][name]
-                    part = _recorded_result(raw)
-                    with column:
-                        st.caption(label)
-                        draw(saved_ds, part, "saved_" + chosen + name, compact=True)
-            else:
-                draw(saved_ds, result, "saved_" + chosen)
-            with st.form("note_" + chosen, border=False):
-                note = st.text_area(
-                    "What do you notice—or want to check next?",
-                    value=saved.get("note", ""),
-                    max_chars=2000,
-                    height=110,
+        canvas, notes = st.columns([2.9, 1], gap="large")
+        with canvas:
+            if state.record:
+                ids = [r["id"] for r in state.record]
+                chosen = st.selectbox(
+                    "A view in your record",
+                    ids,
+                    format_func=lambda v: next(
+                        title_for(state.ds, Request(**r["result"]["request"]))
+                        for r in state.record
+                        if r["id"] == v
+                    ),
+                    key="saved_view",
                 )
-                if st.form_submit_button("Keep this interpretation", icon=":material/edit_note:"):
-                    state.update_note(chosen, note)
-                    st.rerun()
-        else:
-            st.markdown("Your record starts with a view that matters to you.")
-            st.page_link(
-                "app_pages/investigate.py", label="Return to your investigation", icon=":material/explore:"
-            )
-        if state.prediction:
-            _prediction_result(state.prediction)
-        with st.container(border=True):
-            st.markdown("**Take your investigation with you**")
-            st.caption(
-                "Saved views, notes and model records can contain data values even when the original file is omitted. Choose what you’re comfortable sharing."
-            )
-            include = st.checkbox("Include the original table", key="include_original")
-            if st.button(
-                "Prepare my record",
-                key="prepare_record",
-                type="primary",
-                disabled=not state.record and not state.prediction,
-            ):
-                try:
-                    st.session_state.downloads = {
-                        "bundle": export(state, include),
-                        "markdown": readable_markdown(state),
-                        "scope": digest([state.record, state.prediction, include, state.provider_history]),
-                    }
-                except ValueError as exc:
-                    st.error(str(exc))
-            downloads = st.session_state.get("downloads", {})
-            if downloads.get("scope") == digest(
-                [state.record, state.prediction, include, state.provider_history]
-            ):
-                with st.container(horizontal=True):
-                    st.download_button(
-                        "Download readable record",
-                        downloads["markdown"],
-                        "first-look-record.md",
-                        "text/markdown",
-                        key="download_record",
+                saved = next(r for r in state.record if r["id"] == chosen)
+                result = _recorded_result(saved["result"])
+                saved_ds = replace(state.ds, fields=[Field(**f) for f in saved["fields"]])
+                if saved.get("comparison"):
+                    raw = saved["comparison"]
+                    comparison = Comparison(
+                        _recorded_result(raw["selected"]),
+                        _recorded_result(raw["reference"]),
+                        raw["definition"],
                     )
-                    st.download_button(
-                        "Download reproducible evidence",
-                        downloads["bundle"],
-                        "first-look-evidence.zip",
-                        "application/zip",
-                        key="download_evidence",
+                    draw_comparison(saved_ds, comparison, "saved_" + chosen)
+                else:
+                    draw(saved_ds, result, "saved_" + chosen)
+            else:
+                st.markdown("Your record starts with a view that matters to you.")
+                st.page_link(
+                    "app_pages/investigate.py",
+                    label="Return to your investigation",
+                    icon=":material/explore:",
+                )
+            if state.prediction:
+                _prediction_result(state.prediction)
+        with notes:
+            if state.record:
+                with st.form("note_" + chosen, border=False):
+                    note = st.text_area(
+                        "What do you notice—or want to check next?",
+                        value=saved.get("note", ""),
+                        max_chars=2000,
+                        height=180,
                     )
+                    if st.form_submit_button("Keep this interpretation", icon=":material/edit_note:"):
+                        state.update_note(chosen, note)
+                        st.rerun()
+            with st.container(border=True):
+                st.markdown("**Take your investigation with you**")
+                st.caption(
+                    "Saved views, notes and model records can contain data values even when the original file is omitted. Choose what you’re comfortable sharing."
+                )
+                include = st.checkbox("Include the original table", key="include_original")
+                if st.button(
+                    "Prepare my record",
+                    key="prepare_record",
+                    type="primary",
+                    disabled=not state.record and not state.prediction,
+                ):
+                    try:
+                        st.session_state.downloads = {
+                            "bundle": export(state, include),
+                            "markdown": readable_markdown(state),
+                            "scope": digest(
+                                [state.record, state.prediction, include, state.provider_history]
+                            ),
+                        }
+                    except ValueError as exc:
+                        st.error(str(exc))
+                downloads = st.session_state.get("downloads", {})
+                if downloads.get("scope") == digest(
+                    [state.record, state.prediction, include, state.provider_history]
+                ):
+                    with st.container(horizontal=True):
+                        st.download_button(
+                            "Download readable record",
+                            downloads["markdown"],
+                            "first-look-record.md",
+                            "text/markdown",
+                            key="download_record",
+                        )
+                        st.download_button(
+                            "Download reproducible evidence",
+                            downloads["bundle"],
+                            "first-look-evidence.zip",
+                            "application/zip",
+                            key="download_evidence",
+                        )
     with st.popover("Open a saved investigation", icon=":material/folder_open:"):
         uploaded = st.file_uploader("Reopen evidence", type=["zip"], key="evidence_upload")
         if uploaded and st.button("Inspect this saved record", key="inspect_evidence"):

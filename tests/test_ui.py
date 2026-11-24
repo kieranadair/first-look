@@ -79,6 +79,19 @@ def test_reviews_start_automatically_without_setup_and_reuse_unchanged_evidence(
     state.comparison = compare(state.ds, first, [0, 1], state.meanings)
     app.run().run()
     assert len(calls) == 3 and calls[-1]["displayed_evidence"] == "comparison"
+    next(w for w in app.selectbox if w.label == "Look from another angle").select(
+        "category_relationship"
+    ).run()
+    next(w for w in app.selectbox if w.label == "Look at").select("f001")
+    next(w for w in app.selectbox if w.label == "Alongside").select("f000")
+    next(b for b in app.button if b.label == "Look at this").click().run()
+    result = app.session_state["investigation"].current
+    assert (result.request.view, result.request.x, result.request.y) == (
+        "category_relationship",
+        "f001",
+        "f000",
+    )
+    assert sum(row["count"] for row in result.table) == 4
     assert not app.exception
 
 

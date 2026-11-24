@@ -62,14 +62,14 @@ def options(ds, result, comparison=None):
         option["grid"] = {
             "left": 72,
             "top": 40,
-            "width": 340,
-            "height": 340,
+            "width": 440,
+            "height": 440,
             "containLabel": False,
             "outerBoundsMode": "none",
         }
         option["media"] = [
-            {"query": {"maxWidth": 500}, "option": {"grid": {"width": 290, "height": 290}}},
-            {"query": {"maxWidth": 390}, "option": {"grid": {"left": 56, "width": 220, "height": 220}}},
+            # Narrow analytic panels can occur inside a desktop comparison.
+            {"query": {"maxWidth": 540}, "option": {"grid": {"width": 360, "height": 360}}},
         ]
         option["xAxis"] = _axis(_name(ds, req.x, result), bounds=result.meta.get("x_bounds"))
         option["yAxis"] = _axis(_name(ds, req.y, result), bounds=result.meta.get("y_bounds"))

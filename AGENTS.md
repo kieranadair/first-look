@@ -2,6 +2,8 @@
 
 Read `docs/v2/SPECIFICATION.md`, `PLAN.md` and `TESTS.md`. Purpose: help people investigate their own data, see consequential choices and explain what evidence supports. Three destinations: Data, Investigate, Record. No demo gallery or feature itinerary.
 
+- Desktop-only product for data professionals using large monitors. Review at 1920 × 1080 and 2560 × 1440; 1600 × 900 is the comfortable minimum browser viewport. Keep related charts, definitions, model perspectives and reflection adjacent. No mobile/small-laptop layout work or device-detection gates. Narrow chart panels can still occur within a desktop composition.
+
 - Fresh Python-only Streamlit implementation. `archive/v1/` is reference only; never import it into v2. Its tests/docs are historical, not the active specification.
 - Keep immutable source, stable identities, explicit grain/denominators, honest missingness, comparable views and immutable saved records. Unknown meaning is not permission. Models suggest; Python calculates; people own interpretation.
 - Use the installed Streamlit skill/version-matched references for UI and `.agents/skills/typesafe-ai/SKILL.md` for Jev work. Skills do not imply product features.

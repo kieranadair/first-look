@@ -2,7 +2,9 @@
 
 **Get to know your data, follow a useful question, and keep an understanding you can explain.**
 
-First Look is an open-source Python app for people who have a table they care about and some context about what it means. Upload your own CSV or Parquet file. Start with an immediate local view, explore related perspectives, check choices that could change an interpretation, and keep the evidence that matters.
+First Look is an open-source Python app for data professionals who have a table they care about and some context about what it means. Upload your own CSV or Parquet file. Start with an immediate local view, explore related perspectives, check choices that could change an interpretation, and keep the evidence that matters.
+
+It is designed for **larger desktop monitors**, with 1920 × 1080 and 2560 × 1440 as reference viewports and 1600 × 900 as a comfortable minimum. Evidence, model perspectives and interpretation sit alongside each other. Mobile and small-laptop experiences are outside the product scope.
 
 The distinctive contribution is a visible connection between **meaning → calculation → comparison → interpretation**. Python calculates; Jev and Terra help suggest and reason; you supply context and own the judgment. Important friction stays visible—whether a value can be added, whether rows represent repeated entities, or whether a missing day can mean zero. Routine configuration and arithmetic stay out of the way.
 

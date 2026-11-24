@@ -152,6 +152,13 @@ def calculate(ds, request, meanings=None, rows=None, time_rules=None):
     )
 
 
+def categorical_layout(result):
+    """Desktop small multiples: up to four aligned panels across, legible rows."""
+    cols = min(len(result.meta["groups"]), 4)
+    rows = int(np.ceil(len(result.meta["groups"]) / max(cols, 1)))
+    return cols, rows, max(230, 70 + 18 * len(result.meta["categories"]))
+
+
 def extra_options(ds, result):
     """Native ECharts for a conditional categorical or multivariate question."""
     from firstlook.charts import PALETTE
@@ -167,24 +174,23 @@ def extra_options(ds, result):
     }
     if req.view == "category_relationship":
         groups, categories = meta["groups"], meta["categories"]
-        cols = min(len(groups), 3)
-        rows = int(np.ceil(len(groups) / max(cols, 1)))
+        cols, _, row_height = categorical_layout(result)
         share = req.representation == "share"
         maximum = 1 if share else max((r["count"] for r in result.table), default=1)
         option.update(grid=[], xAxis=[], yAxis=[], series=[], title=[])
         for i, group in enumerate(groups):
-            left, top = (i % cols) * 100 / cols + 2, (i // cols) * 100 / rows + 11
+            left, top = (i % cols) * 100 / cols + 1, (i // cols) * row_height
             option["grid"].append(
                 {
                     "left": f"{left}%",
-                    "top": f"{top}%",
-                    "width": f"{94 / cols - 4}%",
-                    "height": f"{75 / rows - 6}%",
+                    "top": top + 36,
+                    "width": f"{100 / cols - 3}%",
+                    "height": row_height - 55,
                     "containLabel": True,
                 }
             )
             option["title"].append(
-                {"text": group, "left": f"{left}%", "top": f"{top - 9}%", "textStyle": {"fontSize": 12}}
+                {"text": group, "left": f"{left}%", "top": top + 6, "textStyle": {"fontSize": 13}}
             )
             option["xAxis"].append({"type": "value", "min": 0, "max": maximum, "gridIndex": i})
             option["yAxis"].append(
