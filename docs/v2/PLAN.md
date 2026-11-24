@@ -14,3 +14,5 @@ Work can be parallel after contracts are defined: numerical engine, provider/pre
 Documentation deliverables are the root README, deployment/API setup, analytical conventions, evidence inspection, these V2 documents and AGENTS.md. Historical instructions stay under the reference archive. Validation results and any unresolved provider effectiveness questions belong in a concise build record after the actual checks run; do not record planned checks as completed.
 
 Completed build and validation are recorded in [BUILD.md](BUILD.md).
+
+The next colour-policy proposal is [COLOUR.md](COLOUR.md): shared semantic encodings, Few's mark-aware intensity families, quantitative references and domains, ECharts/Streamlit responsibilities, model instructions and saved presentation metadata. It is a researched implementation plan, not a completed runtime change.
