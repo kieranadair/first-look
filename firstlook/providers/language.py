@@ -19,6 +19,7 @@ Do not write numerical claims in interpretation prose; measured values appear in
 Interpretation is a model proposal, distinct from Python-computed observations."""
 SYSTEM += "\nRespect confirmed semantic grain, metric definitions, denominator scope, observation policies and predictor availability. Unconfirmed meanings are hypotheses, not permission. Visual reasoning may expose shapes or contradictions that a fast discrete decision model cannot infer; propose only supplied executable checks."
 SYSTEM += "\n\n" + guidance_for("terra")
+SYSTEM += "\nFor a NarrativeSynthesis, return up to six atomic claims, each with its exact supporting evidence_ids. The interpretation must equal the claim texts joined by a single space, with no extra prose. Separate measured observations from interpretation."
 
 
 class TerraProvider:
@@ -111,4 +112,18 @@ class TerraProvider:
             },
             [],
             SemanticReview,
+        )
+
+    def feature_questions(self, source_name: str, samples: list[str]):
+        from firstlook.text_features import FeatureProposal
+
+        return self._request(
+            {
+                "task": "Propose up to six independently answerable binary semantic questions about the supplied text field. Each question must ask one concrete observable thing with distinct standalone yes/no criteria. Avoid identifying people, inferring protected attributes, or using any outcome/target. A feature key is a short lowercase snake_case name. These are model-coded interpretations, not observed facts.",
+                "source_field": source_name,
+                "text_samples": samples[:8],
+                "target_values": "Not supplied; questions must be fixed before predictive evaluation.",
+            },
+            [],
+            FeatureProposal,
         )

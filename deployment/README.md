@@ -13,11 +13,11 @@ A restart can end in-memory investigations or workers. Download bundles to prese
 
 ### Confirming a deployed update
 
-GitHub `main` and a passing CI run do not establish the code loaded by an existing Cloud process. In **About this workbench** in the sidebar, the chart update identifies itself as **First Look 0.3.1** and **Chart renderer: 2026-11-23.1**. The renderer marker is read from the loaded compiler module; an older imported module reports that a reboot is required. A missing marker means the entrypoint itself predates this diagnostic.
+GitHub `main` and a passing CI run do not establish the code loaded by an existing Cloud process. In **About this workbench** in the sidebar, this release identifies itself as **First Look 0.4.0**, **Chart renderer: 2026-11-23.1** and **Judgment policy: 2026-11-24.1**. The renderer marker is read from the loaded compiler module; an older imported module reports that a reboot is required. A missing marker means the entrypoint itself predates this diagnostic.
 
 If the source button links to this repository's `main` but the app still shows older charts, preserve any work and use the owner workspace at `share.streamlit.io` → the app's overflow menu → **Reboot**. Alternatively use **Manage app → overflow menu → Reboot app**. A browser refresh or ordinary script rerun does not force a fresh server build. Follow the [official reboot instructions](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app/reboot-your-app).
 
-After rebooting, check the two sidebar markers and start a fresh local Penguins investigation. Scatterplots should have square inner axes, rotated y-axis titles and declared units in their axis labels. Their safeguards include the square-scatter rule. If the markers are still absent, check the deployed repository, branch, entrypoint and Cloud build logs before changing chart dimensions.
+After rebooting, check the sidebar markers and start a fresh local Penguins investigation. The navigation includes **Text lab** and **Judgments**. Asking a question in Findings shows an interpretation before its explicit execution. Scatterplots should have square inner axes, rotated y-axis titles and declared units in their axis labels. Their safeguards include the square-scatter rule. If the markers are still absent, check the deployed repository, branch, entrypoint and Cloud build logs before changing chart dimensions.
 
 Count versus percentage is a separate analytical choice: single-population histograms/frequencies currently default to recorded row counts. Two-group frequency polygons use within-group proportions so unequal sample sizes do not dominate shape comparisons. Existing proportions are not raw counts labelled as percentages. Changing this default requires an explicit normalisation choice and recorded denominator, not merely appending a percent sign.
 
@@ -48,13 +48,17 @@ In the app, open **Understand → Investigation settings → Allow external anal
 | Component | Receives | Responsibility |
 | --- | --- | --- |
 | Local Python | Source table and user corrections | Profiles, eligibility, statistics, splits, metrics, chart contracts and checks |
-| Jev / TypeSafe | Metadata, candidate summaries and valid choices | Prefer a supplied option or abstain; cannot make an invalid chart valid |
+| Jev / TypeSafe | Task-specific metadata, eligible candidates and criteria; source text only after separate text permission | Atomic applicability, intent, relevance, note-evidence, text-coding and claim support/scope judgments; Python owns decisions and permissions |
 | Hosted TabPFN | Permitted training values/labels and held-out predictors | Predictions under the recorded split; no local weights or GPU |
-| Terra / OpenAI Responses | Field summaries, bounded plotting tables, chart contracts and up to three matched chart images | Suggest questions, propose eligible checks and reconcile computed evidence; no code execution |
+| Terra / OpenAI Responses | Field summaries, bounded plotting tables, chart contracts and up to three matched chart images; optional eight text-only examples without target values | Suggest questions, propose eligible checks and frozen text-feature definitions, reconcile computed evidence; no code execution |
 
 Terra’s images are generated **offscreen from analytical contracts**. They are not screenshots of the app. The text-only comparison receives identical underlying plotting data. Model prose is labeled interpretation; unverified numerical or causal assertions are omitted. Evidence exports record requested/resolved models, packets, usage, decisions, rejected proposals and asset hashes. Provider data retention follows the configured service/account; `store=False` is sent to OpenAI, not a promise about every provider’s retention.
 
 Use dedicated provider keys/projects for this public app and provider-enforced spending/request caps. Verify whether each limit is a hard cutoff or an alert. Visitors can consume the configured account quota without seeing its key. Per-session limits do not impose a global monthly spending cap.
+
+No additional keys are needed for the new workflows. Text lab requires both dataset external-analysis permission and its separate **Allow sharing this dataset's selected text** checkbox. The page previews rows, questions and request/input bounds before coding. Limits are six frozen features, 240 rows, 2,000 characters per text, two coding experiments and two matched model experiments per context. Empty, overlong and unresolved rows are reported separately. Standard Jev jobs allow at most eight requests, 256 questions and 384,000 conservative input-budget bytes; text coding has a separate maximum of 64 requests, 1,440 questions and 2,000,000 input-budget bytes. Every request is additionally bounded to 40 questions and 48,000 serialized-input bytes. These are application guardrails, not provider billing quotes or global spending limits. See [analytical conventions](../docs/ANALYTICAL_CONVENTIONS.md).
+
+You can inspect the Judgments library, local question routing and labelled baseline without keys. Live calibration remains a separate, explicitly authorized development step: `python -m scripts.evaluate_judgments --live --allow-paid-requests` sends up to seven bounded example requests. Ordinary inspection and evidence replay make no provider calls.
 
 Keys belong in Cloud Secrets, not source code, browser storage or frontend session variables. The application uses one owner credential set; BYO visitor credentials are not enabled. Keep actual `.streamlit/secrets.toml` and `.env` files out of Git.
 

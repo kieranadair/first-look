@@ -30,6 +30,7 @@ def main():
                 "-q",
                 "tests/test_providers_and_terra.py",
                 "tests/test_models_and_jobs.py",
+                "tests/test_judgments_workflow.py",
             ],
             check=True,
         )
@@ -41,12 +42,31 @@ def main():
     cfg = settings_from(tomllib.loads(path.read_text()) if path.exists() else {})
     results = {}
     if cfg.available("jev"):
-        record = JevProvider(cfg).choose(
-            {"task": "preflight", "support": 100},
-            {"supported": "Show the supported distribution", "none": "Abstain"},
-            "Choose a supported next view",
+        from firstlook.judgments import JudgmentSpec, applicability_spec, relevance_spec
+
+        record = JevProvider(cfg).judge(
+            {
+                "goal": "Inspect the distribution of the recorded numeric field",
+                "candidates": {"distribution": "A supported numeric distribution"},
+            },
+            [
+                applicability_spec(),
+                JudgmentSpec(
+                    id="task",
+                    purpose="Preflight supported task identity",
+                    kind="choice",
+                    question="Which candidate addresses `goal`?",
+                    options={"distribution": "A supported numeric distribution"},
+                ),
+                relevance_spec("relevance", "candidates.distribution"),
+            ],
+            context="preflight",
+            purpose="Controlled-size live SDK preflight",
         )
-        results["jev"] = {"choice": record.choice, "resolved_model": record.resolved_model}
+        results["jev"] = {
+            "outcomes": {k: v.status for k, v in record.answers.items()},
+            "resolved_model": record.resolved_model,
+        }
     if cfg.available("terra"):
         p = TerraProvider(cfg)
         packet = EvidencePacket(

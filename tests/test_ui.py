@@ -77,7 +77,7 @@ def test_meaning_workspace_confirm_define_and_run_metric():
     app.run()
     app.switch_page("app_pages/meaning.py").run()
     assert not app.exception
-    assert [t.label for t in app.tabs] == ["Decisions", "Metrics", "Structure & time", "Contract"]
+    assert [t.label for t in app.tabs] == ["Decisions", "Metrics", "Structure & time", "Contract", "What if?"]
     quantity = next(s for s in app.selectbox if s.label == "What kind of quantity?")
     quantity.select("flow")
     next(b for b in app.button if b.label == "Confirm quantity meaning").click().run()

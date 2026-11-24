@@ -51,8 +51,8 @@ st.caption(
     f"{len(model.clarifications)} open decisions · {len(model.metrics)} reusable metrics · "
     f"{len(model.entities)} entity definitions · {len(model.relationships)} observed relationships"
 )
-decisions_tab, metrics_tab, structure_tab, contract_tab = st.tabs(
-    ["Decisions", "Metrics", "Structure & time", "Contract"]
+decisions_tab, metrics_tab, structure_tab, contract_tab, scenarios_tab = st.tabs(
+    ["Decisions", "Metrics", "Structure & time", "Contract", "What if?"]
 )
 
 with decisions_tab:
@@ -72,6 +72,22 @@ with decisions_tab:
             question = next(q for q in model.clarifications if q.id == selected_question)
             st.markdown("**" + question.question + "**")
             st.caption(question.reason)
+            from firstlook.clarifications import clarification_queue
+
+            impact, _ = clarification_queue(ds, ctx)
+            entry = next((r for r in impact if r["id"] == question.id), None)
+            if entry and entry["affected"]:
+                st.caption(
+                    f"{entry['unlock_count']} affected metric definitions are currently conditional or disallowed. This is a dependency count, not estimated information gain."
+                )
+                st.dataframe(
+                    [
+                        {k: r[k] for k in ["metric", "status", "requirements", "reasons"]}
+                        for r in entry["affected"]
+                    ],
+                    hide_index=True,
+                    alt="Metric eligibility affected by this open declaration",
+                )
             if question.suggested:
                 st.badge("Proposal: " + question.suggested, icon=":material/lightbulb:")
             if question.affected_metrics:
@@ -81,6 +97,37 @@ with decisions_tab:
             st.caption(
                 "Use Quantity meaning for measurement kind and units; Metrics for totals and denominators; Structure & time for entities and recording schedules."
             )
+            with st.popover(
+                "Review supplied collection notes", icon=":material/description:", on_change="rerun"
+            ) as note_controls:
+                if note_controls.open:
+                    notes = st.text_area(
+                        "Notes relevant to this declaration",
+                        value=ds.record.description,
+                        max_chars=4000,
+                        key="meaning_notes_" + question.id,
+                    )
+                    st.caption(
+                        "Jev can select an existing passage as possible evidence. You still confirm whether it describes this table and establishes the requested meaning."
+                    )
+                    if st.button(
+                        "Find supporting wording with Jev",
+                        disabled=bool(ws.job_id)
+                        or not settings().available("jev")
+                        or not st.session_state.get("external_ok"),
+                        key="review_collection_notes",
+                    ):
+                        from firstlook.ui.runtime import start_note_review
+
+                        try:
+                            start_note_review(ws, question.id, notes)
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(str(exc))
+            if ws.note_review.get("question") == question.id:
+                st.caption(ws.note_review["status"] + " · " + ws.note_review["boundary"])
+                if ws.note_review["passage"]:
+                    st.markdown("> " + ws.note_review["passage"])
         else:
             st.success("The current decision queue is resolved. Definitions remain editable.")
         st.page_link("app_pages/explore.py", label="Continue exploring", icon=":material/explore:")
@@ -222,6 +269,64 @@ with decisions_tab:
                 st.rerun()
             except ValueError as exc:
                 st.error(str(exc))
+
+with scenarios_tab:
+    from firstlook.clarifications import hypothetical_quantity
+    from firstlook.contracts import ChartSpec, ResultArtifact
+    from firstlook.ui.components import chart_view
+
+    st.subheader("See why the declaration matters")
+    st.caption(
+        "Compute two explicitly hypothetical quantity assumptions in isolated contexts. The existing value grain, allocation and observation policies still apply. These alternatives illustrate consequences; they do not establish which meaning is true."
+    )
+    value_metrics = [m.id for m in model.metrics if m.field]
+    if value_metrics:
+        with st.form("semantic_what_if"):
+            scenario_metric = st.selectbox(
+                "Existing value metric", value_metrics, format_func=lambda v: model.metric(v).label
+            )
+            first, second = st.columns(2)
+            kinds = ["flow", "amount", "state", "rate", "ratio", "cumulative"]
+            with first:
+                first_kind = st.selectbox("First quantity assumption", kinds)
+            with second:
+                second_kind = st.selectbox("Second quantity assumption", kinds, index=2)
+            scenario_groups = st.multiselect(
+                "Recorded groups", dimensions(ds), max_selections=2, format_func=ds.label
+            )
+            run_scenarios = st.form_submit_button(
+                "Compare hypothetical definitions", disabled=bool(ws.job_id)
+            )
+        if run_scenarios:
+            try:
+                ws.semantic_scenarios = [
+                    hypothetical_quantity(ds, ctx, scenario_metric, k, scenario_groups)
+                    for k in [first_kind, second_kind]
+                ]
+            except ValueError as exc:
+                st.error(str(exc))
+        if ws.semantic_scenarios:
+            panels = st.columns(2, gap="medium")
+            for i, scenario in enumerate(ws.semantic_scenarios):
+                with panels[i % 2]:
+                    st.markdown(
+                        "**" + scenario["eligibility"]["status"].capitalize() + " under this assumption**"
+                    )
+                    st.caption(scenario["assumption"])
+                    if scenario["result"]:
+                        chart_view(
+                            ChartSpec.model_validate(scenario["chart"]),
+                            ResultArtifact.model_validate(scenario["result"]),
+                            "hypothesis_" + str(i),
+                            height=300,
+                        )
+                    else:
+                        for reason in (
+                            scenario["eligibility"]["reasons"] + scenario["eligibility"]["requirements"]
+                        ):
+                            st.caption(reason)
+    else:
+        st.caption("Define a value metric to compare quantity assumptions.")
 
 with metrics_tab:
     st.subheader("Define once. Ask consistently.")

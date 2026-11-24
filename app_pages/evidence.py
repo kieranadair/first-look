@@ -90,6 +90,11 @@ if ws.investigation is None:
 st.caption(
     f"{len(ws.pins)} pinned observations · {len(ws.comparisons)} saved comparisons · {len(ws.investigation.challenges)} recorded checks"
 )
+if ws.text_runs or ws.investigation.judgments:
+    st.caption(
+        f"{len(ws.text_runs)} frozen text runs and {len(ws.investigation.judgments)} typed judgment batches also travel with this investigation. Recorded inputs can contain source text even when the original table is omitted."
+    )
+    st.page_link("app_pages/judgments.py", label="Inspect model judgments", icon=":material/fact_check:")
 if not ws.pins and saved_view == "Observations":
     st.markdown("### Start an evidence brief.")
     st.caption("Use Pin on an observation. Its computed values and completed checks travel with it.")
@@ -173,6 +178,15 @@ export_state = digest(
         [b.model_dump(mode="json") for b in ws.comparisons],
         ws.comparison.model_dump(mode="json") if ws.comparison else None,
         ws.investigation.coverage,
+        [r.model_dump(mode="json") for r in ws.investigation.judgments],
+        ws.investigation.goal,
+        ws.investigation.recommendations,
+        ws.investigation.question_history,
+        ws.question_review,
+        ws.text_proposal,
+        ws.text_runs,
+        ws.note_review,
+        ws.semantic_scenarios,
     ]
 )
 if prepare:

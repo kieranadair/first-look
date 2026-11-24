@@ -3,7 +3,7 @@
 import streamlit as st
 
 from firstlook.modeling import suggested_model_plan
-from firstlook.ui.components import finding_card, page_header
+from firstlook.ui.components import finding_card, page_header, prepared_question_panel, claim_review_panel
 from firstlook.ui.runtime import settings, start_analysis, start_question, workspace
 
 ws, cfg = workspace(), settings()
@@ -125,6 +125,8 @@ if not ws.replay:
             except ValueError as exc:
                 st.error(str(exc))
 
+prepared_question_panel()
+
 findings = list(inv.findings)
 if view == "Relationships":
     findings = [
@@ -147,6 +149,7 @@ if inv.terra.get("synthesis"):
         st.markdown("**Terra's proposed interpretation**")
         synthesis = inv.terra["synthesis"]
         st.markdown(synthesis["interpretation"])
+        claim_review_panel(inv.terra.get("claim_review"), "investigation")
         st.caption(
             "Model interpretation. Measured observations and completed checks retain their own evidence."
         )

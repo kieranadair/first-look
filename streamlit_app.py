@@ -3,6 +3,7 @@
 import streamlit as st
 
 from firstlook import __version__
+from firstlook.judgments import POLICY_VERSION
 from firstlook.ui.runtime import poll_job, settings, workspace
 from firstlook.visualization import compiler as chart_compiler
 
@@ -66,6 +67,12 @@ pages = {
             help="Evaluate a prediction task and inspect performance on the same held-out observations.",
         ),
         st.Page(
+            "app_pages/text_lab.py",
+            title="Text lab",
+            icon=":material/text_snippet:",
+            help="Turn selected text into frozen, reviewable model-coded features and compare their predictive contribution.",
+        ),
+        st.Page(
             "app_pages/challenge.py",
             title="Challenge",
             icon=":material/fact_check:",
@@ -78,6 +85,12 @@ pages = {
             title="Evidence",
             icon=":material/bookmarks:",
             help="Annotate saved findings, revisit comparisons and export a reproducible investigation.",
+        ),
+        st.Page(
+            "app_pages/judgments.py",
+            title="Judgments",
+            icon=":material/fact_check:",
+            help="Inspect question definitions, probability distributions, ranking reasons and recorded model decisions.",
         ),
     ],
 }
@@ -118,6 +131,7 @@ with st.sidebar:
             "Local work makes no provider calls. External analysis requires your explicit dataset permission."
         )
         st.caption(f"First Look {__version__} · Apache-2.0")
+        st.caption("Judgment policy: " + POLICY_VERSION)
         st.caption(
             "Chart renderer: " + getattr(chart_compiler, "RENDERER_VERSION", "older module — reboot required")
         )

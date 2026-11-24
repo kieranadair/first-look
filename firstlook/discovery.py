@@ -657,6 +657,10 @@ class Investigation:
     semantic_decisions: list = field(default_factory=list)
     coverage: list[dict] = field(default_factory=list)
     related_views: dict[str, dict] = field(default_factory=dict)
+    goal: str = ""
+    judgments: list = field(default_factory=list)
+    recommendations: list[dict] = field(default_factory=list)
+    question_history: list[dict] = field(default_factory=list)
 
     def add_view(self, result: ResultArtifact, finding: Finding) -> None:
         """Bound interactive working views; pins carry their own immutable snapshots."""

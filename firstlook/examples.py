@@ -37,6 +37,11 @@ CATALOG = {
         "Independent variables: restraint is a useful analytical outcome.",
         "grain",
     ),
+    "text": (
+        "From words to evidence",
+        "Support notes, frozen text features and a matched predictive comparison.",
+        "text_snippet",
+    ),
 }
 
 
@@ -74,6 +79,8 @@ def synthetic(kind: str, seed: int = 42, n: int = 600) -> pd.DataFrame:
 
 
 def load_example(key: str) -> Dataset:
+    if key == "text":
+        return text_example()
     if key == "semantic":
         return semantic_example()
     if key in {"reversal", "nonlinear", "null"}:
@@ -93,6 +100,45 @@ def load_example(key: str) -> Dataset:
         if key == "penguins"
         else "UCI Bike Sharing daily · CC BY 4.0 · Fanaee-T"
     )
+    return ds
+
+
+def text_example() -> Dataset:
+    """Synthetic pre-resolution notes; no model-coded answers are fabricated."""
+    from firstlook.contracts import Role
+    from firstlook.semantic.model import get_model, commit_model
+
+    rng = np.random.default_rng(20261124)
+    notes = [
+        "The parcel arrived crushed and the casing is cracked.",
+        "The package is intact but it contains a different item from my order.",
+        "Please explain how to configure the item; it looks intact.",
+        "Both a cracked case and a missing accessory need attention.",
+    ]
+    kinds = rng.integers(0, 4, 360)
+    frame = pd.DataFrame(
+        {
+            "case_id": [f"C{i:04}" for i in range(360)],
+            "customer_id": [f"U{i % 60:03}" for i in range(360)],
+            "opening_note": [notes[k] for k in kinds],
+            "queue": rng.choice(["Standard", "Priority"], 360),
+            "prior_cases": rng.integers(0, 8, 360),
+            "resolution_hours": np.maximum(1, np.array([15, 9, 3, 22])[kinds] + rng.normal(0, 2, 360)).round(
+                2
+            ),
+        }
+    )
+    ds = load_table(frame.to_csv(index=False).encode(), "support_notes.csv")
+    ds.record.name = CATALOG["text"][0]
+    ds.record.source = (
+        "Seeded synthetic support fixture; seed 20261124. No real customer data or Jev outputs."
+    )
+    ds.record.description = "Opening notes are recorded when a support case is created, before its resolution duration is known. Customers can have several cases."
+    field = next(f for f in ds.record.fields if f.name == "opening_note")
+    field.role = field.proposed_role = Role.TEXT
+    model = get_model(ds)
+    model.model_group = next(f.id for f in ds.record.fields if f.name == "customer_id")
+    commit_model(ds, model)
     return ds
 
 

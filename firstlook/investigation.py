@@ -16,6 +16,11 @@ from firstlook.semantic.planner import semantic_packet
 
 
 def prioritize(inv: Investigation, jev, dataset: Dataset | None = None) -> None:
+    if dataset is not None and hasattr(jev, "judge"):
+        from firstlook.recommendations import prioritize_typed
+
+        prioritize_typed(inv, jev, dataset)
+        return
     task_plans = {}
     if dataset is not None:
         from firstlook.exploration import perspective_coverage
@@ -265,7 +270,22 @@ def run_terra(
         log.append({"proposal": p.model_dump(), "accepted": valid, "reason": reason})
         if valid:
             accepted.append(p)
-    if jev and accepted:
+    if jev and accepted and hasattr(jev, "judge"):
+        from firstlook.recommendations import rank_proposals
+
+        try:
+            accepted, ranking = rank_proposals(
+                accepted,
+                inv.goal or "Challenge the supplied interpretations with complementary eligible evidence.",
+                inv.context.id,
+                jev,
+                {f.id: inv.results[f.result_id].support for f in inv.findings},
+            )
+            if ranking:
+                inv.judgments.append(ranking)
+        except ProviderError as exc:
+            inv.terra["ranking_note"] = str(exc)
+    elif jev and accepted:
         try:
             options = {str(i): p.question for i, p in enumerate(accepted)}
             options["none"] = "No additional check is useful"
@@ -317,6 +337,16 @@ def run_terra(
             "task": "Explain what remains an interpretation. Cite only supplied evidence IDs.",
         }
     )
+    from firstlook.claim_review import evidence_items, review_synthesis
+
+    audit = review_synthesis(
+        synthesis, evidence_items(inv), inv.context.id, jev if hasattr(jev, "judge") else None
+    )
+    synthesis.interpretation = audit["display_text"]
+    if audit["record"]:
+        from firstlook.judgments import JudgmentBatch
+
+        inv.judgments.append(JudgmentBatch.model_validate(audit["record"]))
     if re.search(
         r"\b\d+(?:[.,]\d+)?%?\b|\b(caused|causes|proves|statistically significant)\b",
         synthesis.interpretation,
@@ -334,6 +364,7 @@ def run_terra(
         "packet_hash": digest(packet.model_dump()),
         "proposals": log,
         "synthesis": synthesis.model_dump(mode="json"),
+        "claim_review": audit,
         "provider_records": terra.records,
         "relations": [
             {
@@ -427,7 +458,20 @@ def review_comparison(
             (p.finding_id, p.operation) for p in accepted
         }:
             accepted.append(proposal)
-    if jev and accepted:
+    typed_records = []
+    if jev and accepted and hasattr(jev, "judge"):
+        from firstlook.recommendations import rank_proposals
+
+        accepted, ranking = rank_proposals(
+            accepted,
+            "Compare the selected and reference populations using complementary eligible checks.",
+            bundle.spec.selection.base.id,
+            jev,
+            {v.finding.id: v.result.support for v in bundle.views},
+        )
+        if ranking:
+            typed_records.append(ranking.model_dump(mode="json"))
+    elif jev and accepted:
         options = {str(i): p.question for i, p in enumerate(accepted)} | {
             "none": "No further comparison check is useful"
         }
@@ -468,6 +512,43 @@ def review_comparison(
     known = {v.finding.id for v in bundle.views} | {c.id for c in bundle.checks}
     if not set(synthesis.evidence_ids) <= known:
         raise ProviderError("Comparison interpretation cited unknown evidence.")
+    from firstlook.claim_review import review_synthesis
+
+    items = {
+        v.finding.id: {
+            "context": v.result.plan.context,
+            "observation": v.finding.observation,
+            "scope": {
+                "support": v.result.support,
+                "missing": v.result.missing,
+                "reference": bundle.spec.reference,
+                "denominator": bundle.spec.denominator,
+            },
+            "checks": [
+                {"operation": c.operation, "status": c.status, "summary": c.summary}
+                for c in bundle.checks
+                if c.parent_id == v.finding.id
+            ],
+        }
+        for v in bundle.views
+    }
+    items.update(
+        {
+            c.id: {
+                "context": bundle.spec.selection.base.id,
+                "status": c.status,
+                "observation": c.summary,
+                "operation": c.operation,
+            }
+            for c in bundle.checks
+        }
+    )
+    audit = review_synthesis(
+        synthesis, items, bundle.spec.selection.base.id, jev if hasattr(jev, "judge") else None
+    )
+    synthesis.interpretation = audit["display_text"]
+    if audit["record"]:
+        typed_records.append(audit["record"])
     if re.search(
         r"\b\d+(?:[.,]\d+)?%?\b|\b(caused|causes|proves|statistically significant)\b",
         synthesis.interpretation,
@@ -476,6 +557,8 @@ def review_comparison(
         synthesis.interpretation = "The proposed interpretation contained an unverified number or causal assertion. Refer to computed differences and completed checks."
     bundle.interpretation = {
         "synthesis": synthesis.model_dump(mode="json"),
+        "claim_review": audit,
+        "judgments": typed_records,
         "proposals": log,
         "packet": packet.model_dump(mode="json"),
         "provider_records": terra.records,

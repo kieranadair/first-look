@@ -107,7 +107,7 @@ if ws.dataset is None:
                     st.session_state.external_ok = False
                     st.rerun()
     with st.popover("More examples", icon=":material/more_horiz:"):
-        for key in ["bike", "null"]:
+        for key in ["bike", "null", "text"]:
             if st.button(CATALOG[key][0], key="example_" + key, icon=f":material/{CATALOG[key][2]}:"):
                 ws.load(load_example(key))
                 st.session_state.external_ok = False

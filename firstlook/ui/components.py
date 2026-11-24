@@ -260,6 +260,167 @@ def finding_card(finding: Finding, inv: Investigation, lead: bool = False):
                 st.rerun()
 
 
+def prepared_question_panel():
+    from firstlook.questions import QuestionIntent
+    from firstlook.question_workflow import TASKS
+    from firstlook.semantic.model import get_model
+    from firstlook.semantics import dimensions, measures
+    from firstlook.ui.runtime import start_prepared_question
+
+    ws = workspace()
+    review = ws.question_review
+    if not review or not ws.dataset or review.get("context") != ws.context().id:
+        return
+    with st.container(border=True):
+        st.markdown("**Check the interpretation before running it**")
+        st.markdown(review["question"])
+        st.caption(review["method"] + " · " + review["status"])
+        if review.get("provider_error"):
+            st.caption(
+                "Provider error: " + review["provider_error"] + " Local interpretation is shown separately."
+            )
+        if review.get("clarification"):
+            st.info(review["clarification"])
+        if review.get("executed"):
+            st.caption(
+                "This interpretation was executed. Its result and decision record are preserved in Judgments and Evidence."
+            )
+            return
+        ds = ws.dataset
+        intent = QuestionIntent.model_validate(review["intent"])
+        options = list(TASKS)
+        operation = st.selectbox(
+            "Analytical task",
+            options,
+            index=options.index(intent.operation) if intent.operation in options else 0,
+            format_func=lambda k: k.replace("_", " ").capitalize(),
+            key="intent_task_" + review["id"],
+        )
+        st.caption(TASKS[operation])
+        nums, cats = measures(ds), dimensions(ds)
+        times = [f.id for f in ds.record.fields if f.role.value == "timestamp" and not f.excluded]
+
+        def field(label, allowed, position, name):
+            if not allowed:
+                st.caption("No eligible field for " + label.lower())
+                return None
+            chosen = (
+                intent.fields[position]
+                if len(intent.fields) > position and intent.fields[position] in allowed
+                else allowed[0]
+            )
+            return st.selectbox(
+                label,
+                allowed,
+                index=allowed.index(chosen),
+                format_func=ds.label,
+                key="intent_" + name + "_" + review["id"],
+            )
+
+        fields, metric_id, group_by, time_field, within = [], None, [], None, None
+        first, second = st.columns(2, gap="small")
+        if operation in {"relationship", "group_shape", "category_relationship", "time"}:
+            left = nums if operation == "relationship" else times if operation == "time" else cats
+            right = cats if operation == "category_relationship" else nums
+            with first:
+                a = field("First field", left, 0, "first")
+            with second:
+                b = field("Second field", right, 1, "second")
+            fields = [a, b] if a and b else []
+            if operation == "relationship":
+                groups = [None] + cats
+                default = review.get("group_field")
+                within = st.selectbox(
+                    "Optional within-group check",
+                    groups,
+                    index=groups.index(default) if default in groups else 0,
+                    format_func=lambda v: ds.label(v) if v else "Pooled relationship only",
+                    key="intent_within_" + review["id"],
+                )
+        elif operation in {"distribution", "frequency"}:
+            chosen = field("Field", nums if operation == "distribution" else cats, 0, "single")
+            fields = [chosen] if chosen else []
+        elif operation == "metric":
+            model = get_model(ds)
+            ids = [m.id for m in model.metrics]
+            metric_id = st.selectbox(
+                "Existing metric definition",
+                ids,
+                index=ids.index(intent.metric_id) if intent.metric_id in ids else 0,
+                format_func=lambda v: model.metric(v).label,
+                key="intent_metric_" + review["id"],
+            )
+            group_by = st.multiselect(
+                "Group by",
+                cats,
+                default=[v for v in intent.group_by if v in cats],
+                max_selections=2,
+                format_func=ds.label,
+                key="intent_groups_" + review["id"],
+            )
+            time_field = st.selectbox(
+                "Timestamp",
+                [None] + times,
+                format_func=lambda v: ds.label(v) if v else "No time aggregation",
+                key="intent_time_" + review["id"],
+            )
+        period = intent.period
+        if operation == "metric" and time_field:
+            period = (
+                st.segmented_control(
+                    "Period", ["D", "W", "MS"], default=intent.period, key="intent_period_" + review["id"]
+                )
+                or intent.period
+            )
+        st.caption(
+            "Your confirmation selects a descriptive analysis. Python rechecks its semantic permissions; causes, gap filling and metric meanings are not inferred."
+        )
+        if st.button(
+            "Run this interpretation",
+            type="primary",
+            disabled=bool(ws.job_id) or ws.replay,
+            key="execute_intent_" + review["id"],
+        ):
+            try:
+                corrected = QuestionIntent.model_validate(
+                    {
+                        "operation": operation,
+                        "fields": fields,
+                        "metric_id": metric_id,
+                        "group_by": group_by,
+                        "time_field": time_field,
+                        "period": period,
+                    }
+                )
+                start_prepared_question(ws, review, corrected.model_dump(mode="json"), within)
+                st.rerun()
+            except ValueError as exc:
+                st.error(str(exc))
+
+
+def claim_review_panel(audit, key):
+    if not audit:
+        return
+    st.caption(
+        "Claim review · Python checks references and rejects generated numerical/causal assertions. Jev's semantic review is a model signal."
+    )
+    st.dataframe(
+        [
+            {"Claim": c["text"], "Status": c["status"].replace("_", " "), "Reason": c["reason"]}
+            for c in audit["claims"]
+        ],
+        hide_index=True,
+        alt="Claim support and population-scope review",
+    )
+    if audit.get("provider_note"):
+        st.caption("Review provider: " + audit["provider_note"])
+    st.page_link(
+        "app_pages/judgments.py",
+        label="Inspect judgment definitions and records",
+        icon=":material/fact_check:",
+    )
+
+
 def evidence_inspector(finding: Finding, inv: Investigation, compact: bool = False):
     result = inv.results[finding.result_id]
     st.markdown("**Reading this evidence**")
@@ -443,6 +604,7 @@ def comparison_board(bundle, key="comparison"):
     if bundle.interpretation.get("synthesis"):
         st.markdown("**Terra’s proposed interpretation**")
         st.markdown(bundle.interpretation["synthesis"]["interpretation"])
+        claim_review_panel(bundle.interpretation.get("claim_review"), key)
         for question in bundle.interpretation["synthesis"].get("next_questions", []):
             st.caption("Next question: " + question)
     elif bundle.interpretation.get("note"):

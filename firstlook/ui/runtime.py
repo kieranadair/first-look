@@ -19,7 +19,6 @@ from firstlook.providers.base import ProviderError
 from firstlook.providers.language import TerraProvider
 from firstlook.providers.tabpfn import TabPFNProvider
 from firstlook.providers.typesafe import JevProvider
-from firstlook.questions import run_question
 from firstlook.state import Workspace
 
 
@@ -81,7 +80,7 @@ def start_analysis(ws: Workspace, connected: bool = False) -> None:
                 inv.terra["model_note"] = str(exc)
         if jev and not cancelled():
             try:
-                progress("Jev is choosing among valid views")
+                progress("Reviewing task relevance with atomic Jev judgments")
                 prioritize(inv, jev, ds)
             except ProviderError as exc:
                 inv.terra["provider_note"] = str(exc)
@@ -125,14 +124,196 @@ def start_question(ws: Workspace, question: str) -> None:
         raise ValueError("The five-question follow-up allowance is used for this context.")
     ds, inv, cfg = snapshot(ws), copy.deepcopy(ws.investigation), settings()
     assert inv is not None
-    terra = TerraProvider(cfg) if cfg.available("terra") and st.session_state.get("external_ok") else None
+    jev = JevProvider(cfg) if cfg.available("jev") and st.session_state.get("external_ok") else None
 
     def task(progress, cancelled):
-        return run_question(ds, inv, question, terra)
+        from firstlook.question_workflow import prepare_question
+
+        progress("Preparing a supported interpretation for your review")
+        try:
+            return prepare_question(ds, inv.context, question, jev)
+        except ProviderError as exc:
+            review = prepare_question(ds, inv.context, question)
+            review["provider_error"] = str(exc)
+            return review
 
     ws.job_id = manager().submit(ws.owner, ws.context().id, "question:" + question, task)
-    ws.job_context, ws.job_kind = ws.context().id, "analysis"
+    ws.job_context, ws.job_kind = ws.context().id, "interpretation"
     ws.followups += 1
+
+
+def start_prepared_question(ws, review, override=None, group_field=None):
+    from firstlook.question_workflow import execute_prepared
+
+    ds, inv, ctx = snapshot(ws), copy.deepcopy(ws.investigation), ws.context()
+    if inv is None or review.get("context") != ctx.id or review.get("executed"):
+        raise ValueError("Prepare a fresh interpretation in this investigation first.")
+
+    def task(progress, cancelled):
+        progress("Executing the confirmed interpretation")
+        return execute_prepared(ds, inv, review, override, group_field)
+
+    ws.job_id = manager().submit(
+        ws.owner, ctx.id, "confirmed-question:" + digest([review, override, group_field]), task
+    )
+    ws.job_context, ws.job_kind = ctx.id, "confirmed_question"
+
+
+def _text_permission(ws, provider):
+    cfg = settings()
+    if (
+        ws.replay
+        or not cfg.available(provider)
+        or not st.session_state.get("external_ok")
+        or not st.session_state.get("external_text_" + ws.dataset.record.fingerprint)
+    ):
+        raise ValueError(
+            "Configure the provider and explicitly allow sharing this dataset's selected text first."
+        )
+    return cfg
+
+
+def start_text_proposal(ws, field):
+    from firstlook.text_features import selected_text_rows, MAX_TEXT_CHARS
+
+    cfg = _text_permission(ws, "terra")
+    if ws.text_proposal_count >= 2:
+        raise ValueError("This context has used its two feature-proposal requests.")
+    ds, ctx = snapshot(ws), ws.context()
+    ids = selected_text_rows(ds, ctx, field, 60)
+    samples = list(
+        dict.fromkeys(
+            str(v)
+            for v in ds.frame.loc[ids, field].dropna()
+            if str(v).strip() and len(str(v)) <= MAX_TEXT_CHARS
+        )
+    )[:8]
+    if not samples:
+        raise ValueError("No nonempty bounded text examples are available.")
+
+    def task(progress, cancelled):
+        progress("Proposing frozen questions from text only; no target values supplied")
+        terra = TerraProvider(cfg)
+        result = terra.feature_questions(ds.label(field), samples)
+        return {
+            "context": ctx.id,
+            "field": field,
+            "features": [f.model_dump(mode="json") for f in result.features],
+            "records": terra.records,
+        }
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "feature-proposal:" + field, task)
+    ws.job_kind, ws.job_context = "text_proposal", ctx.id
+    ws.text_proposal_count += 1
+
+
+def start_text_coding(ws, field, definitions, limit):
+    from firstlook.text_features import code_text, preview_text_cost
+
+    cfg = _text_permission(ws, "jev")
+    if ws.text_run_count >= 2:
+        raise ValueError("This context has used its two text-coding experiments.")
+    ds, ctx = snapshot(ws), ws.context()
+    preview_text_cost(ds, ctx, field, definitions, limit)
+
+    def task(progress, cancelled):
+        return code_text(
+            ds,
+            ctx,
+            field,
+            definitions,
+            limit,
+            JevProvider(cfg, max_calls=64, max_questions=1440, max_input_bytes=2_000_000),
+            progress,
+            cancelled,
+        ).model_dump(mode="json")
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "text-coding:" + digest([field, definitions, limit]), task)
+    ws.job_kind, ws.job_context = "text_coding", ctx.id
+    ws.text_run_count += 1
+
+
+def start_feature_model(ws, run_id, target, split, split_field, available, hosted):
+    from firstlook.text_features import TextFeatureRun, evaluate_features
+
+    if ws.replay or ws.text_model_count >= 2:
+        raise ValueError("This context has used its two feature-model experiments or is recorded replay.")
+    cfg, ds, ctx = settings(), snapshot(ws), ws.context()
+    if hosted and (not cfg.available("tabpfn") or not st.session_state.get("external_ok")):
+        raise ValueError("Configure hosted TabPFN and allow external analysis first.")
+    run = TextFeatureRun.model_validate(next(r for r in ws.text_runs if r["id"] == run_id))
+    if run.evaluation:
+        raise ValueError(
+            "This frozen feature run already has its final predictive evaluation. Use a new experiment rather than tuning against its holdout."
+        )
+
+    def task(progress, cancelled):
+        result = evaluate_features(
+            ds,
+            ctx,
+            run,
+            target,
+            split,
+            split_field,
+            available,
+            TabPFNProvider(cfg) if hosted else None,
+            progress,
+            cancelled,
+        )
+        return {"run_id": run_id, "evaluation": result}
+
+    ws.job_id = manager().submit(
+        ws.owner, ctx.id, "feature-model:" + digest([run_id, target, split, split_field, hosted]), task
+    )
+    ws.job_kind, ws.job_context = "feature_model", ctx.id
+    ws.text_model_count += 1
+
+
+def start_note_review(ws, question_id, notes):
+    from firstlook.clarifications import review_notes
+
+    cfg, ds, ctx = settings(), snapshot(ws), ws.context()
+    if (
+        ws.replay
+        or ws.note_review_count >= 2
+        or not cfg.available("jev")
+        or not st.session_state.get("external_ok")
+    ):
+        raise ValueError("This review needs Jev, dataset permission and an unused note-review allowance.")
+
+    def task(progress, cancelled):
+        return review_notes(ds, ctx, question_id, notes, JevProvider(cfg))
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "notes:" + digest([question_id, notes]), task)
+    ws.job_kind, ws.job_context = "notes", ctx.id
+    ws.note_review_count += 1
+
+
+def start_ranking(ws, goal):
+    from firstlook.recommendations import prioritize_typed
+
+    cfg, ds, ctx = settings(), snapshot(ws), ws.context()
+    if (
+        ws.replay
+        or not ws.investigation
+        or not cfg.available("jev")
+        or not st.session_state.get("external_ok")
+    ):
+        raise ValueError("Run an investigation, configure Jev and allow external analysis first.")
+    if (
+        sum(r.purpose == "Relevance of eligible complementary evidence" for r in ws.investigation.judgments)
+        >= 4
+    ):
+        raise ValueError("The relevance-review allowance has been used for this context.")
+    inv = copy.deepcopy(ws.investigation)
+    inv.goal = goal[:1000]
+
+    def task(progress, cancelled):
+        prioritize_typed(inv, JevProvider(cfg), ds)
+        return inv
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "ranking:" + digest(goal), task)
+    ws.job_kind, ws.job_context = "analysis", ctx.id
 
 
 def start_semantic_review(ws: Workspace) -> None:
@@ -364,6 +545,19 @@ def poll_job():
     if job.state == "completed" and ws.dataset and job.context == ws.context().id and same_revision:
         if ws.job_kind == "comparison":
             ws.comparison = job.result
+        elif ws.job_kind == "interpretation":
+            ws.question_review = job.result
+        elif ws.job_kind == "text_proposal":
+            ws.text_proposal = job.result
+        elif ws.job_kind == "text_coding":
+            ws.text_runs = (ws.text_runs + [job.result])[-2:]
+            ws.investigation = ws.investigation or Investigation(ws.context())
+        elif ws.job_kind == "feature_model":
+            for run in ws.text_runs:
+                if run["id"] == job.result["run_id"]:
+                    run["evaluation"] = job.result["evaluation"]
+        elif ws.job_kind == "notes":
+            ws.note_review = job.result
         elif ws.job_kind == "semantics":
             ws.semantic_review = job.result
         elif ws.job_kind == "model":
@@ -373,6 +567,8 @@ def poll_job():
                 diagnostic_findings(ws.dataset, ws.investigation, job.result)
         else:
             ws.investigation = job.result
+            if ws.job_kind == "confirmed_question":
+                ws.question_review["executed"] = True
             if ws.job_kind == "recipe" and ws.investigation.findings:
                 ws.opened.add(ws.investigation.findings[0].id)
                 ws.explore_id = ws.investigation.findings[0].id

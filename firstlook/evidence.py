@@ -119,6 +119,33 @@ def brief(workspace: Workspace) -> str:
         lines += [message + "\n" for message in bundle.exclusions]
         if bundle.interpretation.get("synthesis"):
             lines += ["Model interpretation: " + bundle.interpretation["synthesis"]["interpretation"], ""]
+    if workspace.text_runs:
+        from firstlook.text_features import TextFeatureRun, feature_summary
+
+        lines += [
+            "## Model-coded text features",
+            "",
+            "These are recorded model interpretations, not newly observed facts. Unknown states remain separate from negative answers.",
+            "",
+        ]
+        for raw in workspace.text_runs:
+            run = TextFeatureRun.model_validate(raw)
+            lines += [
+                f"Frozen run: {run.id} · {len(run.records)} selected / {run.source_population} source rows · {run.selection}.",
+                "",
+            ]
+            for row in feature_summary(run):
+                lines += [
+                    f"{row['Feature']}: {row['Yes']} yes, {row['No']} no, {row['Unresolved']} unresolved, {row['Missing']} missing, {row['Too long']} overlong.",
+                    "",
+                ]
+            if run.evaluation:
+                lines += [
+                    run.evaluation["protocol"],
+                    "",
+                    f"Matched final held-out rows: {len(run.evaluation['baseline']['test_ids'])}.",
+                    "",
+                ]
     if workspace.model:
         m = workspace.model
         lines += [
@@ -167,6 +194,18 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
         "analysis/coverage.json": json_bytes(inv.coverage),
         "analysis/opened.json": json_bytes(sorted(workspace.opened)),
         "analysis/related.json": json_bytes(inv.related_views),
+        "analysis/judgments.json": json_bytes([record.model_dump(mode="json") for record in inv.judgments]),
+        "analysis/recommendations.json": json_bytes({"goal": inv.goal, "ranking": inv.recommendations}),
+        "analysis/question-history.json": json_bytes(inv.question_history),
+        "analysis/workflow.json": json_bytes(
+            {
+                "prepared_question": workspace.question_review,
+                "text_proposal": workspace.text_proposal,
+                "note_review": workspace.note_review,
+                "semantic_scenarios": workspace.semantic_scenarios,
+            }
+        ),
+        "analysis/text-features.json": json_bytes(workspace.text_runs),
         "analysis/comparisons.json": json_bytes(
             {
                 "saved": [b.model_dump(mode="json") for b in workspace.comparisons],
@@ -197,6 +236,18 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
             raise ValueError("The original data bytes do not match the recorded fingerprint.")
         data_name = "dataset/original.parquet" if raw.startswith(b"PAR1") else "dataset/original.csv"
         files[data_name] = raw
+    contains_model_inputs = bool(
+        inv.judgments
+        or inv.decisions
+        or inv.terra
+        or workspace.semantic_review
+        or workspace.question_review
+        or workspace.text_proposal
+        or workspace.text_runs
+        or workspace.note_review
+        or any(b.interpretation for b in workspace.comparisons)
+        or (workspace.comparison and workspace.comparison.interpretation)
+    )
     files["manifest.json"] = json_bytes(
         {
             "schema_version": 3,
@@ -205,7 +256,8 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
             "fingerprint": ds.record.fingerprint,
             "context": inv.context.id,
             "results": list(inv.results),
-            "contains_private_data": bool(include_data),
+            "contains_private_data": bool(include_data or contains_model_inputs),
+            "contains_model_inputs": contains_model_inputs,
         }
     )
     files["checksums.json"] = json_bytes(
@@ -300,6 +352,26 @@ def import_bundle(
 
         ds = Dataset(record, pd.DataFrame(columns=pd.Index([f.id for f in record.fields])), None)
     inv = Investigation(ctx)
+    from firstlook.judgments import JudgmentBatch
+
+    raw_judgments = json.loads(files.get("analysis/judgments.json", b"[]"))
+    if not isinstance(raw_judgments, list) or len(raw_judgments) > 100:
+        raise ValueError("Invalid typed judgment ledger.")
+    inv.judgments = [JudgmentBatch.model_validate(r) for r in raw_judgments]
+    if any(r.context != ctx.id for r in inv.judgments):
+        raise ValueError("A typed judgment belongs to another investigation context.")
+    recommendations = json.loads(files.get("analysis/recommendations.json", b"{}"))
+    inv.goal = str(recommendations.get("goal", ""))[:1000]
+    inv.recommendations = recommendations.get("ranking", [])
+    inv.question_history = json.loads(files.get("analysis/question-history.json", b"[]"))
+    if (
+        not isinstance(inv.recommendations, list)
+        or len(inv.recommendations) > 16
+        or not isinstance(inv.question_history, list)
+        or len(inv.question_history) > 20
+        or any(r.get("context") != ctx.id for r in inv.question_history)
+    ):
+        raise ValueError("Invalid recorded ranking or interpreted question scope.")
     inv.coverage = json.loads(files.get("analysis/coverage.json", b"[]"))
     inv.related_views = json.loads(files.get("analysis/related.json", b"{}"))
     if (
@@ -383,6 +455,40 @@ def import_bundle(
         replay=True,
         semantic_review=json.loads(files.get("profiles/semantic-review.json", b"{}")),
     )
+    from firstlook.text_features import TextFeatureRun, validate_text_source, validate_feature_evaluation
+
+    raw_text = json.loads(files.get("analysis/text-features.json", b"[]"))
+    if not isinstance(raw_text, list) or len(raw_text) > 2:
+        raise ValueError("Invalid text feature experiment history.")
+    for raw in raw_text:
+        run = TextFeatureRun.model_validate(raw)
+        if (
+            run.context != ctx.id
+            or run.source_field not in {f.id for f in record.fields}
+            or not set(run.source_rows) <= set(ctx.row_ids)
+            or run.source_population != len(ctx.row_ids)
+        ):
+            raise ValueError("Text feature evidence belongs to another source scope.")
+        if not ds.frame.empty:
+            validate_text_source(ds, ctx, run)
+        validate_feature_evaluation(run)
+        ws.text_runs.append(run.model_dump(mode="json"))
+    workflow = json.loads(files.get("analysis/workflow.json", b"{}"))
+    if not isinstance(workflow, dict):
+        raise ValueError("Invalid recorded workflow state.")
+    ws.question_review = workflow.get("prepared_question", {})
+    ws.text_proposal = workflow.get("text_proposal", {})
+    ws.note_review = workflow.get("note_review", {})
+    ws.semantic_scenarios = workflow.get("semantic_scenarios", [])
+    if (
+        not isinstance(ws.semantic_scenarios, list)
+        or len(ws.semantic_scenarios) > 4
+        or any(s.get("parent_context") != ctx.id for s in ws.semantic_scenarios)
+    ):
+        raise ValueError("Invalid recorded hypothetical scope.")
+    for payload in [ws.question_review.get("judgment"), ws.note_review.get("record")]:
+        if payload and JudgmentBatch.model_validate(payload).context != ctx.id:
+            raise ValueError("Recorded workflow judgments have a different scope.")
     from firstlook.comparison import validate_bundle, dataset_for_bundle
     from firstlook.exploration_contracts import ComparisonBundle
 
@@ -430,6 +536,19 @@ def recompute(workspace: Workspace) -> list[dict]:
     if inv is None:
         raise ValueError("No recorded investigation.")
     checks = []
+    from firstlook.text_features import TextFeatureRun, validate_text_source, validate_feature_evaluation
+
+    for raw in workspace.text_runs:
+        run = TextFeatureRun.model_validate(raw)
+        validate_text_source(workspace.dataset, inv.context, run)
+        validate_feature_evaluation(run)
+        checks.append(
+            {
+                "result": run.id,
+                "status": "match",
+                "scope": "Exact text/source membership and recorded model-answer consistency; model judgments are not re-executed",
+            }
+        )
     for rid, saved in inv.results.items():
         if saved.plan.operation == "model_diagnostic":
             checks.append({"result": rid, "status": "recorded-model-output"})

@@ -42,6 +42,15 @@ class Workspace:
     comparison_review_count: int = 0
     return_state: dict = field(default_factory=dict)
     explore_id: str | None = None
+    question_review: dict = field(default_factory=dict)
+    text_proposal: dict = field(default_factory=dict)
+    text_runs: list[dict] = field(default_factory=list)
+    text_run_count: int = 0
+    text_proposal_count: int = 0
+    text_model_count: int = 0
+    note_review: dict = field(default_factory=dict)
+    note_review_count: int = 0
+    semantic_scenarios: list[dict] = field(default_factory=list)
 
     def context(self):
         if self.dataset is None:
@@ -59,6 +68,9 @@ class Workspace:
         self.comparison_review_count = 0
         self.return_state = {}
         self.explore_id = None
+        self.question_review, self.text_proposal, self.note_review = {}, {}, {}
+        self.text_runs, self.semantic_scenarios = [], []
+        self.text_run_count = self.text_proposal_count = self.text_model_count = self.note_review_count = 0
 
     def begin_filtered(self):
         if self.selection is None or self.selection.base.id != self.context().id:
@@ -79,6 +91,15 @@ class Workspace:
                 "opened",
                 "cohort_revision",
                 "comparison_review_count",
+                "question_review",
+                "text_proposal",
+                "text_runs",
+                "text_run_count",
+                "text_proposal_count",
+                "text_model_count",
+                "note_review",
+                "note_review_count",
+                "semantic_scenarios",
             ]
         }
         saved["context"] = self.context().id

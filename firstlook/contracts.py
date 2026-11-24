@@ -263,11 +263,17 @@ class SemanticReview(Contract):
     dataset_note: str = Field(default="", max_length=1000)
 
 
+class NarrativeClaim(Contract):
+    text: str = Field(min_length=1, max_length=1000)
+    evidence_ids: list[str] = Field(min_length=1, max_length=8)
+
+
 class NarrativeSynthesis(Contract):
     interpretation: str = Field(max_length=4000)
     evidence_ids: list[str] = Field(max_length=20)
     next_questions: list[str] = Field(default_factory=list, max_length=3)
     limitations: list[str] = Field(default_factory=list, max_length=8)
+    claims: list[NarrativeClaim] = Field(default_factory=list, max_length=6)
 
 
 class EvidencePacket(Contract):

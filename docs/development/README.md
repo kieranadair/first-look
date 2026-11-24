@@ -13,9 +13,12 @@ python -m scripts.benchmark
 python -m scripts.provider_preflight --offline
 python -m scripts.evaluate_terra --seeds 17 82
 python -m scripts.evaluate_exploration
+python -m scripts.evaluate_judgments
 ```
 
 The provider tests use the **real official SDKs** with controlled HTTP transports or a controlled hosted-SDK boundary. They do not present fixtures as live models. Once keys are configured, `python -m scripts.provider_preflight --live` makes small billable smoke calls. `python -m scripts.evaluate_terra --live --seeds 17` runs a recorded matched text/visual evaluation; inspect correctness, check yield, contradictions, abstention and cost before claiming visual-model uplift.
+
+`evaluate_judgments` runs seven labelled routing cases against the local baseline by default; this is a developer regression pack, not a Jev accuracy claim. After obtaining permission, a budget and agreement about the example metadata sent using `TYPESAFE_API_KEY`, run `python -m scripts.evaluate_judgments --live --allow-paid-requests` for at most seven live Jev requests. The mixed Noul/Choice/Score adapter is exercised without live spending in the normal test suite. Reports stay under ignored `reports/`.
 
 For a real runtime/browser check, start this **development-only** server in one terminal:
 
@@ -29,6 +32,7 @@ In another terminal, from the repo root:
 python -m scripts.runtime_smoke
 python -m scripts.semantic_smoke
 python -m scripts.exploration_smoke
+python -m scripts.judgments_smoke
 playwright install chromium
 python -m scripts.browser_smoke
 python -m scripts.semantic_browser_smoke
@@ -36,6 +40,8 @@ python -m scripts.exploration_browser_smoke
 ```
 
 The browser test verifies actual chart-mark selection, filtering/reset, downloads, responsive cards and light/dark tokens. It captures **no screenshots, video or traces**. Stop the development server after checking.
+
+The judgments runtime script checks the question interpretation/confirmation boundary, Text lab, recorded question library, offline evaluation and evidence export through Streamlit's real development agent API. It makes no provider calls or screenshots. Pass `--url http://127.0.0.1:8767` to use another local port. Restart the development server after changes to imported module exports rather than relying on stale in-process imports.
 
 For an isolated check of all thirteen native chart templates, with no analyst session or agent API:
 
@@ -48,6 +54,7 @@ This command starts and stops its own localhost fixture (default port 8766), mea
 ## Reference material
 
 - [Current implementation context](CONTEXT.md)
+- [Typed-judgment uplift report](jev-uplift.md) and [build plan](jev-uplift-plan.md)
 - [Interface refinement and design rationale](ui-uplift.md), including the authorized screenshot review of bundled examples
 - [Comparison/exploration uplift](exploration-uplift.md) and [build design](exploration-uplift-plan.md)
 - [Chart design audit and provider policy](../research/chart-design-audit.md), with the deterministic/preference boundary and primary sources
