@@ -51,6 +51,9 @@ class Workspace:
     note_review: dict = field(default_factory=dict)
     note_review_count: int = 0
     semantic_scenarios: list[dict] = field(default_factory=list)
+    event_runs: list[dict] = field(default_factory=list)
+    event_prepare_count: int = 0
+    event_model_count: int = 0
 
     def context(self):
         if self.dataset is None:
@@ -71,6 +74,8 @@ class Workspace:
         self.question_review, self.text_proposal, self.note_review = {}, {}, {}
         self.text_runs, self.semantic_scenarios = [], []
         self.text_run_count = self.text_proposal_count = self.text_model_count = self.note_review_count = 0
+        self.event_runs = []
+        self.event_prepare_count = self.event_model_count = 0
 
     def begin_filtered(self):
         if self.selection is None or self.selection.base.id != self.context().id:
@@ -100,6 +105,9 @@ class Workspace:
                 "note_review",
                 "note_review_count",
                 "semantic_scenarios",
+                "event_runs",
+                "event_prepare_count",
+                "event_model_count",
             ]
         }
         saved["context"] = self.context().id

@@ -4,6 +4,7 @@ import streamlit as st
 
 from firstlook import __version__
 from firstlook.judgments import POLICY_VERSION
+from firstlook.analytical_tasks import TASK_POLICY
 from firstlook.ui.runtime import poll_job, settings, workspace
 from firstlook.visualization import compiler as chart_compiler
 
@@ -73,6 +74,12 @@ pages = {
             help="Turn selected text into frozen, reviewable model-coded features and compare their predictive contribution.",
         ),
         st.Page(
+            "app_pages/event_lab.py",
+            title="Event lab",
+            icon=":material/event_repeat:",
+            help="Build past-only features and complete future outcomes from one recorded event table, then inspect a fixed temporal holdout.",
+        ),
+        st.Page(
             "app_pages/challenge.py",
             title="Challenge",
             icon=":material/fact_check:",
@@ -121,6 +128,7 @@ with st.sidebar:
             )
         )
     with st.expander("About this workbench"):
+        st.caption("Task policy: " + TASK_POLICY)
         st.caption(
             "An open-source exploration utility. Descriptive patterns and predictive diagnostics do not establish causality."
         )

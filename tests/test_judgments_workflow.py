@@ -207,6 +207,45 @@ class Coder:
         return batch(state, definitions, values, context, purpose)
 
 
+def test_text_features_inherit_reviewed_task_timing_and_compare_estimators_separately():
+    from firstlook.analytical_tasks import (
+        TaskDefinition,
+        AvailabilityRule,
+        save_task,
+        save_availability,
+        availability_decision,
+    )
+    from firstlook.text_features import derived_model_table, evaluate_features, validate_feature_evaluation
+
+    ds = text_data()
+    save_task(
+        ds,
+        TaskDefinition(
+            dataset=ds.record.fingerprint,
+            target="f003",
+            purpose="prediction",
+            decision_time="When the opening note is submitted",
+        ),
+    )
+    for fid in ["f001", "f002"]:
+        save_availability(ds, AvailabilityRule(field=fid, status="known_at_anchor"))
+    run = code_text(ds, ds.context(), "f001", [feature()], 240, Coder())
+    derived, target, _, features, _ = derived_model_table(ds, ds.context(), run, "f003", None, True)
+    assert availability_decision(derived, features[0], derived.frame)[0] == "allowed"
+    run.evaluation = evaluate_features(ds, ds.context(), run, "f003", "random", None, True)
+    validate_feature_evaluation(run)
+    assert {r["Model held fixed"] for r in run.evaluation["matched_comparisons"]} >= {
+        "Dummy",
+        "Median",
+        "Linear",
+        "Gradient boosting",
+    }
+    assert all(
+        r["Difference"] == pytest.approx(r["Original + coded"] - r["Original"])
+        for r in run.evaluation["matched_comparisons"]
+    )
+
+
 def test_text_coding_deduplicates_inputs_but_keeps_every_source_membership():
     ds = text_data()
     before = ds.frame.copy(deep=True)

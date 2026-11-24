@@ -8,6 +8,7 @@ from pathlib import Path
 import httpx
 
 from scripts.runtime_smoke import walk
+from firstlook import __version__
 
 
 def main():
@@ -51,7 +52,7 @@ def main():
         raise AssertionError(text()[-5000:])
 
     interact()
-    assert "First Look 0.4.0" in text() and "Judgment policy: 2026-11-24.1" in text()
+    assert f"First Look {__version__}" in text() and "Judgment policy: 2026-11-24.1" in text()
     click("example_penguins")
     button("Investigate this dataset")
     wait_for(lambda: any(n["type"] == "echarts_chart" for n in walk(state["tree"])))
@@ -74,7 +75,7 @@ def main():
     click("prepare_export")
     assert len([n for n in walk(state["tree"]) if n["type"] == "download_button"]) == 2
     report = {
-        "version": "0.4.0",
+        "version": __version__,
         "prepared_before_execution": True,
         "explicit_confirmation": True,
         "text_lab": True,

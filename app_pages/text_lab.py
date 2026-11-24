@@ -294,6 +294,16 @@ if run.evaluation:
     ]
     st.dataframe(rows, hide_index=True, alt="Matched held-out metrics with and without coded features")
     st.caption(evaluation["protocol"])
+    if evaluation.get("matched_comparisons"):
+        st.markdown("**What changed when the estimator stayed the same?**")
+        st.dataframe(
+            evaluation["matched_comparisons"],
+            hide_index=True,
+            alt="Paired original versus coded-feature comparisons holding estimator and memberships fixed",
+        )
+        st.caption(
+            "These differences assess representation within each named estimator. Comparisons between different estimators answer a separate question; no significance or causal effect is implied."
+        )
     for key in ["baseline", "augmented"]:
         for warning in evaluation[key]["warnings"]:
             st.caption(warning)

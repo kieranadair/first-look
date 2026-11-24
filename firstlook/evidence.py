@@ -70,6 +70,20 @@ def brief(workspace: Workspace) -> str:
     ]
     if ds:
         lines += [f"Dataset fingerprint: {ds.record.fingerprint}", "", f"Source: {ds.record.source}", ""]
+        if ds.record.semantic_model and ds.record.semantic_model.search.get("analytical_task"):
+            from firstlook.analytical_tasks import current_task
+
+            task = current_task(ds)
+            lines += [
+                "## Analytical task",
+                "",
+                task.question,
+                "",
+                f"Purpose: {task.purpose}. Unit: {task.unit}. Intended population: {task.population}.",
+                "",
+                f"Decision time: {task.decision_time}. Horizon: {task.horizon_days} days. Complete through: {task.complete_through or 'unconfirmed'}.",
+                "",
+            ]
         if ds.record.semantic_model:
             model = ds.record.semantic_model
             lines += [
@@ -146,6 +160,24 @@ def brief(workspace: Workspace) -> str:
                     f"Matched final held-out rows: {len(run.evaluation['baseline']['test_ids'])}.",
                     "",
                 ]
+    if workspace.event_runs:
+        from firstlook.event_tasks import EventTaskRun
+
+        lines += ["## Derived event tasks", ""]
+        for raw in workspace.event_runs:
+            event = EventTaskRun.model_validate(raw)
+            lines += [
+                f"{event.spec.recipe} within {event.spec.horizon_days} days · {len(event.records)} entity anchors · {len(event.train_ids)} training / {len(event.test_ids)} held-out rows.",
+                "",
+                event.preparation["split_rule"],
+                "",
+                event.preparation["generalization"],
+                "",
+            ]
+            if event.model:
+                from firstlook.model_protocol import comparison_verdict
+
+                lines += [comparison_verdict(event.model), ""]
     if workspace.model:
         m = workspace.model
         lines += [
@@ -206,6 +238,7 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
             }
         ),
         "analysis/text-features.json": json_bytes(workspace.text_runs),
+        "analysis/event-tasks.json": json_bytes(workspace.event_runs),
         "analysis/comparisons.json": json_bytes(
             {
                 "saved": [b.model_dump(mode="json") for b in workspace.comparisons],
@@ -256,7 +289,7 @@ def export_bundle(workspace: Workspace, include_data: bool = False) -> bytes:
             "fingerprint": ds.record.fingerprint,
             "context": inv.context.id,
             "results": list(inv.results),
-            "contains_private_data": bool(include_data or contains_model_inputs),
+            "contains_private_data": bool(include_data or contains_model_inputs or workspace.event_runs),
             "contains_model_inputs": contains_model_inputs,
         }
     )
@@ -336,9 +369,12 @@ def import_bundle(
             delimiter=str(record.parser.get("delimiter", ",")),
             encoding=str(record.parser.get("encoding", "utf-8-sig")),
             missing_tokens=cast(Any, record.parser.get("missing_tokens")),
+            inference_version=int(cast(Any, record.parser.get("inference_version", 1))),
         )
         if ds.record.rows != record.rows or ds.record.columns != record.columns:
             raise ValueError("Recorded dimensions do not match the supplied data.")
+        if record.source_profile and record.source_profile != ds.record.source_profile:
+            raise ValueError("Literal source profile does not match the supplied source bytes.")
         ds.record = record
         if record.semantic_model:
             from firstlook.semantic.model import validate_model
@@ -457,6 +493,20 @@ def import_bundle(
     )
     from firstlook.text_features import TextFeatureRun, validate_text_source, validate_feature_evaluation
 
+    from firstlook.event_tasks import EventTaskRun, event_dataset, validate_event_source
+
+    raw_events = json.loads(files.get("analysis/event-tasks.json", b"[]"))
+    if not isinstance(raw_events, list) or len(raw_events) > 2:
+        raise ValueError("Invalid event task history.")
+    for raw in raw_events:
+        run = EventTaskRun.model_validate(raw)
+        if run.source_context.id != ctx.id:
+            raise ValueError("Event task belongs to a different source population.")
+        event_dataset(run)
+        if not ds.frame.empty:
+            validate_event_source(ds, run)
+        ws.event_runs.append(run.model_dump(mode="json"))
+
     raw_text = json.loads(files.get("analysis/text-features.json", b"[]"))
     if not isinstance(raw_text, list) or len(raw_text) > 2:
         raise ValueError("Invalid text feature experiment history.")
@@ -522,6 +572,12 @@ def import_bundle(
         inv.model_runs = [ModelRun.model_validate(m) for m in json.loads(files["model/history.json"])]
     elif ws.model:
         inv.model_runs = [ws.model]
+    from firstlook.model_protocol import validate_recorded_protocol
+
+    for run in inv.model_runs + ([ws.model] if ws.model else []):
+        if run.context != ctx.id or not set(run.train_ids + run.test_ids) <= set(ctx.row_ids):
+            raise ValueError("Recorded model protocol belongs to another source population.")
+        validate_recorded_protocol(run)
     from firstlook.comparison import validate_model_slice
 
     for bundle in ws.comparisons + ([ws.comparison] if ws.comparison else []):
@@ -536,6 +592,18 @@ def recompute(workspace: Workspace) -> list[dict]:
     if inv is None:
         raise ValueError("No recorded investigation.")
     checks = []
+    from firstlook.event_tasks import EventTaskRun, validate_event_source
+
+    for raw in workspace.event_runs:
+        run = EventTaskRun.model_validate(raw)
+        validate_event_source(workspace.dataset, run)
+        checks.append(
+            {
+                "result": run.id,
+                "status": "match",
+                "scope": "Rebuilt entity populations, past-only features, complete forward labels and exact source memberships; models not refitted",
+            }
+        )
     from firstlook.text_features import TextFeatureRun, validate_text_source, validate_feature_evaluation
 
     for raw in workspace.text_runs:

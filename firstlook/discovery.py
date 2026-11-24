@@ -24,6 +24,7 @@ from firstlook.semantics import dimensions, measures
 
 SEED = 20261120
 OPERATIONS = {
+    "recording_process",
     "metric",
     "distribution",
     "ecdf",
@@ -83,6 +84,13 @@ def validate_plan(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) ->
         raise ValueError("Field meanings or semantic contract changed; recompute this plan.")
     if plan.operation not in OPERATIONS:
         raise ValueError("Unsupported analytical operation.")
+    if plan.operation == "recording_process":
+        from firstlook.recording_process import report
+
+        if not plan.fields or plan.fields[0] != plan.params.get("time_field"):
+            raise ValueError("Coverage timestamp does not match the declared fields.")
+        report(dataset, ctx, time_field=plan.fields[0], fields=plan.fields[1:])
+        return
     version = plan.params.get("recipe_version", 1)
     if not isinstance(version, int) or isinstance(version, bool) or version not in {1, 2}:
         raise ValueError("Unsupported calculation recipe version; inspect or migrate the recorded evidence.")
@@ -156,6 +164,10 @@ def validate_plan(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) ->
 
 def analyze(dataset: Dataset, ctx: AnalysisContext, plan: AnalysisPlan) -> tuple[ResultArtifact, Finding]:
     validate_plan(dataset, ctx, plan)
+    if plan.operation == "recording_process":
+        from firstlook.recording_process import analyze_recording
+
+        return analyze_recording(dataset, ctx, plan)
     if plan.operation == "exploration":
         from firstlook.exploration import execute
 
@@ -680,6 +692,10 @@ class Investigation:
 def discover(dataset: Dataset, context: AnalysisContext | None = None) -> Investigation:
     ctx = context or dataset.context()
     inv = Investigation(ctx)
+    if dataset.record.semantic_model and dataset.record.semantic_model.search.get("analytical_task"):
+        from firstlook.analytical_tasks import current_task
+
+        inv.goal = current_task(dataset).question
     frame = dataset.frame.loc[ctx.row_ids]
     nums = sorted(measures(dataset), key=lambda f: f != ctx.focus)[:40]
     cats = sorted(dimensions(dataset), key=lambda f: f != ctx.focus)[:10]
@@ -797,6 +813,14 @@ def discover(dataset: Dataset, context: AnalysisContext | None = None) -> Invest
                 add("time", [f.id, value], f"How does recorded {dataset.label(value)} vary over time?", 0.7)
     if frame.isna().any().any():
         add("missingness", [], "Where is information missing?", 0.62)
+    if any(f.role == Role.TIME and not f.excluded for f in dataset.record.fields):
+        from firstlook.recording_process import recording_plan
+
+        try:
+            coverage_plan = recording_plan(dataset, ctx)
+            proposed.append((0.65, coverage_plan))
+        except ValueError:
+            pass
     from firstlook.semantic.planner import candidates
 
     semantic_candidates, semantic_log = candidates(dataset, ctx)

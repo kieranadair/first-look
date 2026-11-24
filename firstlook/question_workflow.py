@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from firstlook.analytical_tasks import task_packet
+
 import re
 from difflib import SequenceMatcher
 
@@ -66,6 +68,7 @@ def prepare_question(dataset, context, question, jev=None):
             for m in get_model(dataset).metrics[:20]
         }
         state = {
+            "analytical_task": task_packet(dataset),
             "goal": question,
             "candidates": TASKS,
             "measures": measures,

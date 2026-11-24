@@ -14,7 +14,7 @@ page_header(
     "Put an observation beside a declared alternative. See what changes and what holds up.",
     compact=True,
 )
-if ws.investigation is None:
+if ws.investigation is None or not ws.investigation.findings:
     st.caption("Build an overview, then choose an observation to give it a second look.")
     st.page_link(
         "app_pages/understand.py" if ws.dataset is None else "app_pages/explore.py",
@@ -24,6 +24,17 @@ if ws.investigation is None:
     st.stop()
 inv, ds = ws.investigation, ws.dataset
 assert ds is not None
+perspective = st.segmented_control(
+    "Challenge perspective",
+    ["Observation", "Recording process"],
+    default="Observation",
+    key="challenge_perspective",
+)
+if perspective == "Recording process":
+    from firstlook.ui.task_controls import recording_panel
+
+    recording_panel(ws, "challenge_recording")
+    st.stop()
 ids = [f.id for f in inv.findings]
 key = "challenge_parent_" + inv.context.id
 if ws.challenge_id in ids and st.session_state.get(key) != ws.challenge_id:

@@ -694,9 +694,9 @@ def perspective_coverage(ds, inv, opened=()):
         ),
         (
             "Data and meaning fitness",
-            {"missingness"},
+            {"missingness", "recording_process"},
             1,
-            "Exact bounded profiling and recorded semantic decisions; declarations are not inferred domain truth",
+            "Exact bounded profiling, temporal recording coverage and recorded semantic decisions; declarations are not inferred domain truth",
         ),
     ]
     output = []

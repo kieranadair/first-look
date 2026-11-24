@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 from typing import Any, cast
-from datetime import timedelta
 import numpy as np
 import pandas as pd
 from firstlook.contracts import ChartSpec, Finding, ResultArtifact, clean, digest
@@ -15,6 +14,20 @@ def _ids(frame):
     if "__source_rows" in frame:
         return sorted({int(i) for ids in frame["__source_rows"] for i in ids})
     return [int(i) for i in frame.index]
+
+
+def _coverage_boundary(value, stamp):
+    """A complete calendar date uses the observation clock, without dropping precision."""
+    cutoff = pd.Timestamp(value)
+    if stamp.tzinfo is not None:
+        cutoff = (
+            cutoff.tz_localize(stamp.tzinfo) if cutoff.tzinfo is None else cutoff.tz_convert(stamp.tzinfo)
+        )
+    elif cutoff.tzinfo is not None:
+        raise ValueError(
+            "Coverage has a timezone but observation timestamps do not. Confirm a shared time basis before declaring complete periods."
+        )
+    return cutoff + pd.Timedelta(1, unit="D")
 
 
 def _entity_ids(frame, keys):
@@ -499,7 +512,7 @@ def _evaluate(dataset, ctx, plan):
                         and policy.coverage_complete
                         and policy.complete_through
                         and stamp + pd.tseries.frequencies.to_offset(period_frequency)
-                        <= pd.Timestamp(policy.complete_through).to_pydatetime() + timedelta(days=1)
+                        <= _coverage_boundary(policy.complete_through, stamp)
                     ),
                 }
             )

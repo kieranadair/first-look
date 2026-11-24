@@ -78,6 +78,7 @@ class DatasetRecord(Contract):
     description: str = ""
     parser: dict[str, JsonValue] = Field(default_factory=dict)
     semantic_model: SemanticModel | None = None
+    source_profile: dict[str, JsonValue] = Field(default_factory=dict)
 
 
 class AnalysisContext(Contract):
@@ -221,6 +222,7 @@ class ModelRun(Contract):
 class HypothesisProposal(Contract):
     question: str = Field(max_length=500)
     operation: Literal[
+        "recording_process",
         "subgroup",
         "extremes",
         "rank",

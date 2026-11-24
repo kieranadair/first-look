@@ -82,15 +82,21 @@ def suggested_model_plan(dataset: Dataset, ctx: AnalysisContext) -> tuple[str, s
     return target, "time" if times else "random", times[0] if times else None
 
 
-def predictor_policy(dataset: Dataset, target: str, frame: pd.DataFrame) -> tuple[list[str], dict]:
+def predictor_policy(
+    dataset: Dataset, target: str, frame: pd.DataFrame, task=None, availability_frame=None
+) -> tuple[list[str], dict]:
+    from firstlook.analytical_tasks import availability_decision
+
     allowed, excluded = [], {}
     for f in dataset.record.fields:
         if f.id == target:
             continue
-        from firstlook.semantic.model import get_model
 
-        if not get_model(dataset).meaning(f.id).available_at_prediction:
-            excluded[f.id] = "Declared unavailable at prediction time"
+        timing, reason = availability_decision(
+            dataset, f.id, frame if availability_frame is None else availability_frame, task
+        )
+        if timing == "excluded":
+            excluded[f.id] = reason
         elif f.excluded or f.role in {Role.ID, Role.TIME, Role.TEXT, Role.UNKNOWN}:
             excluded[f.id] = "Excluded role or user exclusion"
         elif frame[f.id].nunique() < 2:
@@ -209,56 +215,18 @@ def run_model(
     provider=None,
     progress: Callable[[str], None] = lambda _: None,
     cancelled: Callable[[], bool] = lambda: False,
+    fixed_split=None,
+    reference_predictions=None,
 ) -> ModelRun:
     from firstlook.semantic.model import get_model
 
     semantic_model = get_model(dataset)
-    if ctx.id != dataset.context(ctx.row_ids, ctx.focus, ctx.assumption).id:
-        raise ValueError("The predictive protocol has a stale semantic context.")
-    if semantic_model.model_group and (split != "group" or split_field != semantic_model.model_group):
-        raise ValueError(
-            "The semantic contract requires a group holdout on "
-            + dataset.label(semantic_model.model_group)
-            + ". Change the contract explicitly to use a different predictive task."
-        )
-    if target not in eligible_targets(dataset):
-        raise ValueError("Choose an eligible measure or supported categorical focus with 200 labeled rows.")
-    data = dataset.frame.loc[ctx.row_ids].dropna(subset=[target])
+    from firstlook.model_protocol import prepare_model
+
+    prepared = prepare_model(dataset, ctx, target, split, split_field, requested, fixed_split)
+    data, predictors, excluded = prepared.data, prepared.predictors, prepared.excluded
+    train_ids, test_ids = prepared.train_ids, prepared.test_ids
     task = "regression" if dataset.field(target).role == Role.MEASURE else "classification"
-    if len(data) > 10_000:
-        if split == "time":
-            data = data.sort_values(split_field).iloc[np.linspace(0, len(data) - 1, 10_000).astype(int)]
-        elif split == "group":
-            parts, total = [], 0
-            for _, part in data.groupby(split_field, sort=True):
-                if total + len(part) <= 10_000:
-                    parts.append(part)
-                    total += len(part)
-            if not parts:
-                raise ValueError("No whole group fits the model budget.")
-            data = pd.concat(parts)
-        else:
-            data = data.sample(10_000, random_state=SEED).sort_index()
-    if len(data) < 200:
-        raise ValueError("The selected context needs 200 labeled rows.")
-    if data[target].nunique() < 2:
-        raise ValueError("The selected target is constant in this analytical context.")
-    predictors, excluded = predictor_policy(dataset, target, data)
-    if split_field in predictors:
-        predictors.remove(split_field)
-        excluded[split_field] = "Split field excluded from predictors"
-    if requested is not None:
-        if not set(requested).issubset(predictors):
-            raise ValueError("The requested predictors include a forbidden or unknown field.")
-        predictors = list(requested)
-    predictors = predictors[:40]
-    if not predictors:
-        raise ValueError("No eligible predictors remain.")
-    train_ids, test_ids = make_split(data, target, task, split, split_field)
-    if min(len(train_ids), len(test_ids)) < 20:
-        raise ValueError("Both sides of the split require 20 observations.")
-    if set(train_ids) & set(test_ids):
-        raise ValueError("Train and test membership overlap.")
     xtrain, xtest = data.loc[train_ids, predictors].copy(), data.loc[test_ids, predictors].copy()
     for f in predictors:
         if dataset.field(f).role != Role.MEASURE:
@@ -278,6 +246,7 @@ def run_model(
     constructors = (
         [
             ("Dummy", DummyRegressor()),
+            ("Median", DummyRegressor(strategy="median")),
             ("Linear", Ridge(alpha=1)),
             (
                 "Gradient boosting",
@@ -294,18 +263,34 @@ def run_model(
             ),
         ]
     )
-    scores, outputs = {}, {}
+    scores, outputs, latencies = {}, {}, {}
     with threadpool_limits(limits=1):
         for name, estimator in constructors:
             if cancelled():
                 raise ValueError("The model run was cancelled.")
             progress("Evaluating " + name.lower() + " baseline")
             model = Pipeline([("preprocess", _preprocessor(xtrain)), ("estimator", estimator)])
+            import time
+
+            started = time.perf_counter()
             model.fit(xtrain, ytrain)
             pred = model.predict(xtest)
             probs = model.predict_proba(xtest) if task == "classification" else None
+            latencies[name] = (time.perf_counter() - started) * 1000
             scores[name], outputs[name] = metrics_for(task, ytest, pred, probs), (pred, probs)
-    warnings = [f"{len(data):,} labeled rows; fixed 70/30 protocol. Predictability is not causality."]
+    for name, prediction in (reference_predictions or {}).items():
+        if name in outputs:
+            raise ValueError("A task baseline cannot replace a named estimator.")
+        values = np.asarray(prediction)
+        if len(values) != len(test_ids):
+            raise ValueError("Task baseline predictions must align to the exact holdout.")
+        values = encoder.transform(values.astype(str)) if task == "classification" else values.astype(float)
+        if not np.isfinite(values).all():
+            raise ValueError("Task baseline predictions must be finite.")
+        scores[name], outputs[name] = metrics_for(task, ytest, values), (values, None)
+    warnings = [
+        f"{len(train_ids):,} training / {len(test_ids):,} held-out rows under the recorded {split} protocol. Predictability is not causality."
+    ]
     warnings.append(
         "Predictor availability follows declared contract exclusions; undeclared prediction-time availability is an assumption requiring review."
     )
@@ -337,28 +322,32 @@ def run_model(
             warnings.append(str(exc))
     elif provider is None:
         warnings.append("TabPFN was not run. Displayed diagnostics use the named local baseline.")
-    pred, probs = outputs[active]
-    rows = []
-    for i, rowid in enumerate(test_ids):
-        actual = (
-            float(np.asarray(ytest)[i])
-            if task == "regression"
-            else str(encoder.inverse_transform([np.asarray(ytest)[i]])[0])
-        )
-        prediction = float(pred[i]) if task == "regression" else str(encoder.inverse_transform([pred[i]])[0])
-        row = {
-            "row_id": int(rowid),
-            "actual": actual,
-            "predicted": prediction,
-            "error": float(abs(float(actual) - float(prediction)))
-            if task == "regression"
-            else float(actual != prediction),
-        }
-        if task == "regression":
-            row["residual"] = float(actual) - float(prediction)
-        elif probs is not None:
-            row["true_class_probability"] = float(probs[i, np.asarray(ytest)[i]])
-        rows.append(clean(row))
+    all_rows = {}
+    for name, (pred, probs) in outputs.items():
+        rows = []
+        for i, rowid in enumerate(test_ids):
+            actual = (
+                float(np.asarray(ytest)[i])
+                if task == "regression"
+                else str(encoder.inverse_transform([np.asarray(ytest)[i]])[0])
+            )
+            prediction = (
+                float(pred[i]) if task == "regression" else str(encoder.inverse_transform([pred[i]])[0])
+            )
+            row = {
+                "row_id": int(rowid),
+                "actual": actual,
+                "predicted": prediction,
+                "error": float(abs(float(actual) - float(prediction)))
+                if task == "regression"
+                else float(actual != prediction),
+            }
+            if task == "regression":
+                row["residual"] = float(actual) - float(prediction)
+            elif probs is not None:
+                row["true_class_probability"] = float(probs[i, np.asarray(ytest)[i]])
+            rows.append(clean(row))
+        all_rows[name] = rows
     return ModelRun(
         id=digest([ctx.id, target, predictors, split, split_field, active, record]),
         context=ctx.id,
@@ -369,12 +358,16 @@ def run_model(
         train_ids=train_ids,
         test_ids=test_ids,
         metrics=clean(scores),
-        predictions=rows,
+        predictions=all_rows[active],
         warnings=warnings,
         excluded=excluded,
         provider=active,
         model_record=clean(record),
         parameters={
+            "readiness": prepared.report,
+            "task_definition": prepared.task.model_dump(mode="json"),
+            "predictions_by_model": all_rows,
+            "local_latency_ms": latencies,
             "seed": SEED,
             "semantic_revision": semantic_model.revision,
             "group_constraint": semantic_model.model_group,

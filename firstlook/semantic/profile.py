@@ -311,6 +311,43 @@ def inspect_relationship(dataset, child: str, parent: str, within: list[str] | N
 
 def refresh_questions(model: SemanticModel, dataset) -> None:
     questions = []
+    task = model.search.get("analytical_task")
+    rules = model.search.get("availability", {})
+    if isinstance(task, dict) and task.get("purpose") == "prediction" and isinstance(rules, dict):
+        for field in dataset.record.fields:
+            raw = rules.get(field.id, {})
+            if (
+                field.role in {Role.MEASURE, Role.CATEGORY, Role.BOOL, Role.ORDINAL, Role.TEXT}
+                and not field.excluded
+                and field.id != task.get("target")
+                and (
+                    not isinstance(raw, dict)
+                    or raw.get("status", "unreviewed") == "unreviewed"
+                    or (
+                        raw.get("status") == "known_at_anchor"
+                        and raw.get("basis")
+                        != digest(
+                            {
+                                "decision_time": task.get("decision_time"),
+                                "anchor_field": task.get("anchor_field"),
+                            }
+                        )
+                    )
+                    or (raw.get("mutable") and not raw.get("history_available"))
+                )
+            ):
+                questions.append(
+                    Clarification(
+                        id="q_availability_" + field.id,
+                        subject=field.id,
+                        property="availability",
+                        question="Was " + field.name + " known at the declared decision time?",
+                        reason="Prospective predictors require reviewed time-of-knowledge evidence. Use Task & availability; a column name or observed association does not establish availability.",
+                        priority=0.97,
+                    )
+                )
+                if len(questions) >= 8:
+                    break
     for meaning in model.meanings:
         if not meaning.confirmed and meaning.kind != "unknown":
             affected = [

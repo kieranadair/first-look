@@ -61,6 +61,13 @@ def page_header(title: str, subtitle: str, compact: bool = True):
                     ws.rows = None
                     ws.invalidate()
                 st.rerun()
+        if ws.dataset.record.semantic_model and ws.dataset.record.semantic_model.search.get(
+            "analytical_task"
+        ):
+            from firstlook.analytical_tasks import current_task
+
+            task = current_task(ws.dataset)
+            st.caption(f"{task.purpose.capitalize()} · {task.question} · Unit: {task.unit}")
 
 
 def render_chart(

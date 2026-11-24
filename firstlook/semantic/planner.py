@@ -46,8 +46,11 @@ def metric_plan(dataset, ctx, mid, groups=None, time_field=None, period="MS", qu
 def semantic_packet(dataset, limit=16):
     """Bound metadata, not raw rows. Meanings carry their confirmation state."""
     model = get_model(dataset)
+    from firstlook.analytical_tasks import task_packet
+
     return clean(
         {
+            "analytical_task": task_packet(dataset),
             "revision": model.revision,
             "grain": model.grain,
             "grain_confirmed": model.grain_confirmed,

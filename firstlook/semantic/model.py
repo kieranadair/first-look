@@ -19,6 +19,9 @@ def get_model(dataset) -> SemanticModel:
 
 
 def validate_model(dataset, model: SemanticModel) -> SemanticModel:
+    from firstlook.analytical_tasks import validate_task_metadata
+
+    validate_task_metadata(dataset, model)
     if model.dataset != dataset.record.fingerprint:
         raise ValueError("This semantic contract belongs to a different dataset.")
     if model.parsing_scope != parsing_scope(dataset):

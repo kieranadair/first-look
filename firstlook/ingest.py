@@ -94,7 +94,11 @@ def from_frame(
         raise InputError(f"Use a table with at most {MAX_COLS} fields.")
     if frame.memory_usage(deep=True).sum() > MAX_FRAME:
         raise InputError("The decoded table exceeds the 80 MiB memory budget.")
+    from firstlook.source_inspection import unsafe_integer_string
+
     frame = frame.copy().reset_index(drop=True)
+    parser = dict(parser or {"missing_tokens": [""]})
+    parser.setdefault("inference_version", 2)
     original_names = [str(c) for c in frame.columns]
     frame.columns = [f"f{i:03}" for i in range(len(frame.columns))]
     fields = []
@@ -108,10 +112,18 @@ def from_frame(
             numeric = pd.to_numeric(s, errors="coerce")
             valid = int(s.notna().sum())
             leading_codes = s.dropna().astype(str).str.match(r"^[+-]?0\d+$").any()
-            if valid and not leading_codes and numeric.notna().sum() / valid >= 0.95:
+            identifier = bool(
+                re.search(r"(^id$|(^|[ _])id$|_id$|identifier|^index$|^record$|_code$)", original, re.I)
+            )
+            integer_text = s.dropna().astype(str).str.match(r"^[+-]?\d+$")
+            unsafe_integer = bool(integer_text.any()) and any(
+                unsafe_integer_string(v) for v in s.dropna().astype(str)[integer_text]
+            )
+            preserve = parser["inference_version"] == 2 and (identifier or unsafe_integer)
+            if valid and not leading_codes and not preserve and numeric.notna().sum() / valid >= 0.95:
                 failures = int((s.notna() & numeric.isna()).sum())
                 s = numeric
-            elif (
+            elif not preserve and (
                 re.search(r"date|time|timestamp|dteday|(^|_)day$", original, re.I)
                 and valid
                 and not leading_codes
@@ -152,7 +164,7 @@ def from_frame(
             columns=len(frame.columns),
             fields=fields,
             source=source,
-            parser=parser or {"missing_tokens": [""]},
+            parser=parser,
         ),
         frame,
         raw,
@@ -170,7 +182,10 @@ def load_table(
     delimiter: str = ",",
     encoding: str = "utf-8-sig",
     missing_tokens: list[str] | None = None,
+    inference_version: int = 2,
 ) -> Dataset:
+    if inference_version not in {1, 2}:
+        raise InputError("Unsupported source inference version.")
     if len(data) > MAX_BYTES:
         raise InputError("The file exceeds the 25 MiB upload limit.")
     try:
@@ -212,10 +227,15 @@ def load_table(
             if len(names) != len(frame.columns):
                 raise InputError("Header width does not match the data.")
             frame.columns = names
-            frame = frame.mask(frame.isin(missing_tokens or [""]))
+            # Inspect literal values before the declared missing-token policy is applied.
         else:
             raise InputError("Choose a CSV or Parquet file.")
-        return from_frame(
+        from firstlook.source_inspection import inspect_source
+
+        source_profile = inspect_source(frame, missing_tokens or [""])
+        if name.lower().endswith(".csv") or inference_version == 2:
+            frame = frame.mask(frame.isin(missing_tokens or [""]))
+        dataset = from_frame(
             frame,
             name,
             data,
@@ -223,8 +243,11 @@ def load_table(
                 "delimiter": delimiter,
                 "encoding": encoding,
                 "missing_tokens": missing_tokens or [""],
+                "inference_version": inference_version,
             },
         )
+        dataset.record.source_profile = source_profile
+        return dataset
     except InputError:
         raise
     except (ValueError, UnicodeError, StopIteration, OSError, csv.Error) as exc:

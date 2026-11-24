@@ -187,6 +187,7 @@ export_state = digest(
         ws.text_runs,
         ws.note_review,
         ws.semantic_scenarios,
+        ws.event_runs,
     ]
 )
 if prepare:

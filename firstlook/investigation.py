@@ -12,6 +12,7 @@ from firstlook.ingest import Dataset
 from firstlook.semantics import dimensions
 from firstlook.providers.base import ProviderError
 from firstlook.visualization.review_assets import render_asset
+from firstlook.recording_process import compact_packet
 from firstlook.semantic.planner import semantic_packet
 
 
@@ -49,6 +50,7 @@ def prioritize(inv: Investigation, jev, dataset: Dataset | None = None) -> None:
     state = {
         "focus": inv.context.focus,
         "perspective_coverage": inv.coverage,
+        "recording_process": compact_packet(dataset, inv.context) if dataset is not None else {},
         "selection_policy": "Eligible tasks only; prefer complementary evidence over redundant winners",
         "additional_tasks": [
             {
@@ -127,6 +129,10 @@ def prioritize(inv: Investigation, jev, dataset: Dataset | None = None) -> None:
 def valid_proposal(dataset: Dataset, inv: Investigation, proposal: HypothesisProposal) -> tuple[bool, str]:
     if proposal.operation == "none":
         return False, "Abstained"
+    if proposal.operation == "recording_process" and any(
+        c.operation == "recording_process" for c in inv.challenges
+    ):
+        return False, "An existing recording-process check already covers this source context"
     finding = next((f for f in inv.findings if f.id == proposal.finding_id), None)
     if finding is None or not set(proposal.fields).issubset(dataset.frame.columns):
         return False, "Unknown evidence or field identity"
@@ -224,6 +230,7 @@ def run_terra(
                 "remaining_checks": 2,
                 "semantic_contract": semantic_packet(dataset, 8),
                 "perspective_coverage": inv.coverage,
+                "recording_process": compact_packet(dataset, inv.context) if dataset is not None else {},
                 "models": [
                     {
                         "id": m.id,
@@ -233,6 +240,12 @@ def run_terra(
                         "train_rows": len(m.train_ids),
                         "heldout_rows": len(m.test_ids),
                         "baseline_metrics": m.metrics,
+                        "task_definition": m.parameters.get("task_definition"),
+                        "readiness": {
+                            k: v
+                            for k, v in m.parameters.get("readiness", {}).items()
+                            if k not in {"train_ids", "test_ids"}
+                        },
                         "warnings": m.warnings,
                     }
                     for m in inv.model_runs[-1:]
@@ -240,6 +253,7 @@ def run_terra(
             }
         ),
         allowed_operations=[
+            "recording_process",
             "subgroup",
             "extremes",
             "rank",

@@ -1,6 +1,7 @@
 """A quick first pass, with field evidence beside the meanings it informs."""
 
 import hashlib
+from typing import Any, cast
 
 import streamlit as st
 
@@ -47,6 +48,7 @@ def open_dataset():
             "delimiter": delimiter,
             "encoding": encoding,
             "missing_tokens": [""] + [v.strip() for v in missing.split(",") if v.strip()],
+            "inference_version": 2,
         }
         if (
             ws.dataset is None
@@ -107,7 +109,7 @@ if ws.dataset is None:
                     st.session_state.external_ok = False
                     st.rerun()
     with st.popover("More examples", icon=":material/more_horiz:"):
-        for key in ["bike", "null", "text"]:
+        for key in ["bike", "null", "text", "events"]:
             if st.button(CATALOG[key][0], key="example_" + key, icon=f":material/{CATALOG[key][2]}:"):
                 ws.load(load_example(key))
                 st.session_state.external_ok = False
@@ -210,6 +212,29 @@ with st.container(horizontal=True, vertical_alignment="center", gap="small"):
                 st.rerun()
 
 st.subheader("Review the fields against their evidence")
+with st.popover(
+    "Inspect literal source values", icon=":material/manage_search:", on_change="rerun"
+) as source_inspector:
+    if source_inspector.open:
+        from firstlook.source_inspection import inspection_rows
+
+        st.caption(
+            "All source rows before parsing. Marker and placeholder candidates are not automatically declared missing. Identifier strings and large integer strings are protected by inference recipe 2."
+        )
+        st.dataframe(
+            inspection_rows(ds),
+            hide_index=True,
+            alt="Literal marker candidates and conversion evidence for every source field",
+        )
+        inspect_source_field = st.selectbox(
+            "Source evidence field",
+            [f.id for f in ds.record.fields],
+            format_func=ds.label,
+            key="source_evidence_field",
+        )
+        st.json(
+            cast(Any, ds.record.source_profile.get("fields", {})).get(inspect_source_field, {}), expanded=True
+        )
 st.caption(
     "Correct roles and units on the left; inspect recorded values on the right. Proposed roles remain unconfirmed until you apply them."
 )

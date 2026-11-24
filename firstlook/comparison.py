@@ -384,6 +384,7 @@ def dataset_for_bundle(bundle, source):
         delimiter=str(record.parser.get("delimiter", ",")),
         encoding=str(record.parser.get("encoding", "utf-8-sig")),
         missing_tokens=cast(Any, record.parser.get("missing_tokens")),
+        inference_version=int(cast(Any, record.parser.get("inference_version", 1))),
     )
     if ds.record.rows != record.rows or ds.record.columns != record.columns:
         raise ValueError("A comparison's saved parsing dimensions do not match its source.")

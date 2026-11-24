@@ -11,6 +11,11 @@ from firstlook.ingest import Dataset, load_table
 
 ROOT = Path(__file__).resolve().parent.parent / "examples"
 CATALOG = {
+    "events": (
+        "What happens next?",
+        "Observed events, delayed information and a complete future-window task.",
+        "event_repeat",
+    ),
     "reversal": (
         "The hidden reversal",
         "A strong pooled relationship can tell a different story within groups.",
@@ -79,6 +84,8 @@ def synthetic(kind: str, seed: int = 42, n: int = 600) -> pd.DataFrame:
 
 
 def load_example(key: str) -> Dataset:
+    if key == "events":
+        return event_example()
     if key == "text":
         return text_example()
     if key == "semantic":
@@ -99,6 +106,51 @@ def load_example(key: str) -> Dataset:
         "Palmer Penguins · CC0 · Horst, Hill and Gorman"
         if key == "penguins"
         else "UCI Bike Sharing daily · CC BY 4.0 · Fanaee-T"
+    )
+    return ds
+
+
+def event_example() -> Dataset:
+    """Known synthetic observation coverage; no predictive results are supplied."""
+    from firstlook.semantic.model import get_model, commit_model
+
+    rng = np.random.default_rng(20261125)
+    records = []
+    start = pd.Timestamp("2024-01-01", tz="UTC")
+    for entity in range(160):
+        probability = rng.uniform(0.015, 0.09)
+        for day in range(240):
+            if rng.random() < probability:
+                event = start + pd.Timedelta(day * 24 + int(rng.integers(0, 24)), unit="h")
+                records.append(
+                    {
+                        "customer_id": f"C{entity:04}",
+                        "event_id": f"E{len(records):06}",
+                        "event_timestamp": event,
+                        "available_timestamp": event + pd.Timedelta(int(rng.integers(0, 36)), unit="h"),
+                        "channel": rng.choice(["Web", "Store"]),
+                    }
+                )
+    frame = pd.DataFrame(records).sort_values("event_timestamp").reset_index(drop=True)
+    ds = load_table(frame.to_csv(index=False).encode(), "synthetic-events.csv")
+    ds.record.name = CATALOG["events"][0]
+    ds.record.source = "Seeded synthetic event fixture; seed 20261125. Complete event coverage is supplied by the generator, not inferred."
+    ds.record.description = "One observed purchase event per event_id. Information can arrive up to 35 hours later. The generator records all events through 2024-08-27 UTC; this supplied truth is for the synthetic example only."
+    model = get_model(ds).model_copy(deep=True)
+    for policy in model.time_policies:
+        if ds.label(policy.field) == "event_timestamp":
+            policy.kind, policy.confirmed, policy.coverage_complete, policy.complete_through = (
+                "event",
+                True,
+                True,
+                "2024-08-27",
+            )
+    commit_model(
+        ds,
+        model,
+        "table",
+        "synthetic_event_coverage",
+        "Generator-supplied complete event recording; not automatically inferred",
     )
     return ds
 

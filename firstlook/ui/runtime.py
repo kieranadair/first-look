@@ -119,6 +119,47 @@ def start_model(
         ws.model_count += 1
 
 
+def start_event_preparation(ws, specification):
+    from firstlook.event_tasks import EventTaskSpec, prepare_event_task
+
+    if ws.replay or ws.event_prepare_count >= 2:
+        raise ValueError("Two event preparations per context; recorded replay is read-only.")
+    spec = EventTaskSpec.model_validate(specification)
+    ds, ctx = snapshot(ws), ws.context()
+
+    def task(progress, cancelled):
+        return prepare_event_task(ds, ctx, spec, progress, cancelled).model_dump(mode="json")
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "event-prepare:" + digest(spec.model_dump()), task)
+    ws.job_kind, ws.job_context = "event_prepare", ctx.id
+    ws.event_prepare_count += 1
+
+
+def start_event_evaluation(ws, run_id, hosted=False):
+    from firstlook.event_tasks import evaluate_event_task, event_preflight
+
+    if ws.replay or ws.event_model_count >= 2:
+        raise ValueError("Two event-model evaluations per context; recorded replay is read-only.")
+    run = copy.deepcopy(next(r for r in ws.event_runs if r["id"] == run_id))
+    if run["source_context"] != ws.context().model_dump(mode="json"):
+        raise ValueError("This event task has a different source context.")
+    readiness = event_preflight(run)
+    if readiness["status"] == "blocked":
+        raise ValueError(" ".join(readiness["errors"]))
+    cfg, ctx = settings(), ws.context()
+    if hosted and (not cfg.available("tabpfn") or not st.session_state.get("external_ok")):
+        raise ValueError("Configure hosted TabPFN and allow external analysis first.")
+
+    def task(progress, cancelled):
+        return evaluate_event_task(
+            run, TabPFNProvider(cfg) if hosted else None, progress, cancelled
+        ).model_dump(mode="json")
+
+    ws.job_id = manager().submit(ws.owner, ctx.id, "event-model:" + run_id, task)
+    ws.job_kind, ws.job_context = "event_model", ctx.id
+    ws.event_model_count += 1
+
+
 def start_question(ws: Workspace, question: str) -> None:
     if ws.followups >= 5:
         raise ValueError("The five-question follow-up allowance is used for this context.")
@@ -552,6 +593,11 @@ def poll_job():
         elif ws.job_kind == "text_coding":
             ws.text_runs = (ws.text_runs + [job.result])[-2:]
             ws.investigation = ws.investigation or Investigation(ws.context())
+        elif ws.job_kind == "event_prepare":
+            ws.event_runs = (ws.event_runs + [job.result])[-2:]
+            ws.investigation = ws.investigation or Investigation(ws.context())
+        elif ws.job_kind == "event_model":
+            ws.event_runs = [job.result if r["id"] == job.result["id"] else r for r in ws.event_runs]
         elif ws.job_kind == "feature_model":
             for run in ws.text_runs:
                 if run["id"] == job.result["run_id"]:

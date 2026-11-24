@@ -33,6 +33,7 @@ python -m scripts.runtime_smoke
 python -m scripts.semantic_smoke
 python -m scripts.exploration_smoke
 python -m scripts.judgments_smoke
+python -m scripts.task_validity_smoke --url http://127.0.0.1:8765
 playwright install chromium
 python -m scripts.browser_smoke
 python -m scripts.semantic_browser_smoke
@@ -42,6 +43,8 @@ python -m scripts.exploration_browser_smoke
 The browser test verifies actual chart-mark selection, filtering/reset, downloads, responsive cards and light/dark tokens. It captures **no screenshots, video or traces**. Stop the development server after checking.
 
 The judgments runtime script checks the question interpretation/confirmation boundary, Text lab, recorded question library, offline evaluation and evidence export through Streamlit's real development agent API. It makes no provider calls or screenshots. Pass `--url http://127.0.0.1:8767` to use another local port. Restart the development server after changes to imported module exports rather than relying on stale in-process imports.
+
+The task-validity runtime script prepares a synthetic event task, inspects preflight, evaluates actual local models, opens held-out diagnostics, checks recording coverage/task controls and prepares evidence downloads. Default port 8768; it uses no hosted provider. Plain pytest covers numerical and temporal invariants, including future-perturbation tests and legacy parsing replay. Installed third-party skill assets are preserved verbatim and excluded from app lint/formatting and deployment packaging.
 
 For an isolated check of all thirteen native chart templates, with no analyst session or agent API:
 
@@ -54,6 +57,7 @@ This command starts and stops its own localhost fixture (default port 8766), mea
 ## Reference material
 
 - [Current implementation context](CONTEXT.md)
+- [Task-validity uplift](task-validity-uplift.md), [plan](task-validity-plan.md) and [research-to-pattern mapping](../research/task-validity.md)
 - [Typed-judgment uplift report](jev-uplift.md) and [build plan](jev-uplift-plan.md)
 - [Interface refinement and design rationale](ui-uplift.md), including the authorized screenshot review of bundled examples
 - [Comparison/exploration uplift](exploration-uplift.md) and [build design](exploration-uplift-plan.md)

@@ -272,6 +272,19 @@ def derived_model_table(dataset, context, run, target, split_field, available_co
 
     validate_text_source(dataset, context, run)
     original = get_model(dataset)
+    from firstlook.analytical_tasks import (
+        current_task,
+        availability_rules,
+        availability_decision,
+        availability_basis,
+    )
+
+    source_task = current_task(dataset)
+    timing, reason = availability_decision(
+        dataset, run.source_field, dataset.frame.loc[run.source_rows], source_task
+    )
+    if timing == "excluded":
+        raise ValueError("Source text is ineligible: " + reason)
     if not available_confirmed or not original.meaning(run.source_field).available_at_prediction:
         raise ValueError(
             "Confirm pre-outcome text availability; a declared unavailable source cannot become a predictor."
@@ -279,6 +292,9 @@ def derived_model_table(dataset, context, run, target, split_field, available_co
     if target == run.source_field or target not in dataset.frame:
         raise ValueError("Choose an independent recorded predictive target.")
     essential = {f for f in [target, split_field, original.model_group] if f is not None}
+    essential.update(f for f in [source_task.anchor_field, source_task.outcome_known_field] if f)
+    rules = availability_rules(dataset)
+    essential.update(r.timestamp for r in rules.values() if r.timestamp)
     essential.update(k for e in original.entities for k in e.keys)
     allowed = [
         f.id
@@ -321,6 +337,42 @@ def derived_model_table(dataset, context, run, target, split_field, available_co
     model.model_group = mapping.get(original.model_group) if original.model_group else None
     for src, dst in mapping.items():
         model.meaning(dst).available_at_prediction = original.meaning(src).available_at_prediction
+    inherited = {}
+    for src, dst in mapping.items():
+        if src in rules:
+            inherited[dst] = (
+                rules[src]
+                .model_copy(update={"field": dst, "timestamp": mapping.get(rules[src].timestamp)})
+                .model_dump(mode="json")
+            )
+    for fid in feature_ids:
+        if run.source_field in rules:
+            inherited[fid] = (
+                rules[run.source_field]
+                .model_copy(
+                    update={"field": fid, "timestamp": mapping.get(rules[run.source_field].timestamp)}
+                )
+                .model_dump(mode="json")
+            )
+    if inherited:
+        model.search["availability"] = inherited
+    if original.search.get("analytical_task"):
+        model.search["analytical_task"] = source_task.model_copy(
+            update={
+                "dataset": derived.record.fingerprint,
+                "target": mapping.get(source_task.target),
+                "anchor_field": mapping.get(source_task.anchor_field),
+                "outcome_known_field": mapping.get(source_task.outcome_known_field),
+            }
+        ).model_dump(mode="json")
+    if original.search.get("analytical_task"):
+        from firstlook.analytical_tasks import TaskDefinition
+
+        derived_task = TaskDefinition.model_validate(model.search["analytical_task"])
+        for raw in inherited.values():
+            if raw["status"] == "known_at_anchor" and raw["basis"] == availability_basis(source_task):
+                raw["basis"] = availability_basis(derived_task)
+        model.search["availability"] = inherited
     derived.record.semantic_model = validate_model(derived, model)
     derived.record.description = f"Frozen text run {run.id}; parent context {context.id}. Source row mapping is saved separately. Questions were fixed without target values or held-out errors."
     return derived, mapping[target], mapping.get(split_field), feature_ids, mapping
@@ -338,13 +390,14 @@ def evaluate_features(
     progress=lambda _: None,
     cancelled=lambda: False,
 ):
-    from firstlook.modeling import run_model, predictor_policy
+    from firstlook.modeling import run_model
+    from firstlook.model_protocol import prepare_model
 
     derived, y, group, features, mapping = derived_model_table(
         dataset, context, run, target, split_field, available_confirmed
     )
     ctx = derived.context()
-    allowed, _ = predictor_policy(derived, y, derived.frame)
+    allowed = prepare_model(derived, ctx, y, split, group).predictors
     base = [f for f in allowed if f not in features and f != group][:34]
     augmented = list(dict.fromkeys(base + [f for f in features if f in allowed]))[:40]
     if not base or augmented == base:
@@ -370,7 +423,31 @@ def evaluate_features(
         "augmented": enhanced.model_dump(mode="json"),
         "protocol": "Frozen questions; matched final holdout; no feature-search or held-out feedback loop",
         "availability_confirmed": available_confirmed,
+        "matched_comparisons": matched_feature_comparisons(baseline, enhanced),
     }
+
+
+def matched_feature_comparisons(baseline, augmented):
+    """Hold the estimator and memberships fixed when assessing coded representation."""
+    if baseline.train_ids != augmented.train_ids or baseline.test_ids != augmented.test_ids:
+        raise ValueError("Feature ablations need exactly matched memberships.")
+    rows = []
+    for name in sorted(set(baseline.metrics) & set(augmented.metrics)):
+        for metric in sorted(set(baseline.metrics[name]) & set(augmented.metrics[name])):
+            before, after = baseline.metrics[name][metric], augmented.metrics[name][metric]
+            rows.append(
+                {
+                    "Model held fixed": name,
+                    "Metric": metric,
+                    "Original": before,
+                    "Original + coded": after,
+                    "Difference": after - before,
+                    "Direction": "Lower is better"
+                    if metric in {"MAE", "RMSE", "Log loss"}
+                    else "Higher is better",
+                }
+            )
+    return rows
 
 
 def validate_feature_evaluation(run):
@@ -379,6 +456,14 @@ def validate_feature_evaluation(run):
     evaluation = run.evaluation
     baseline = ModelRun.model_validate(evaluation["baseline"])
     augmented = ModelRun.model_validate(evaluation["augmented"])
+    from firstlook.model_protocol import validate_recorded_protocol
+
+    validate_recorded_protocol(baseline)
+    validate_recorded_protocol(augmented)
+    if evaluation.get("matched_comparisons") is not None and evaluation[
+        "matched_comparisons"
+    ] != matched_feature_comparisons(baseline, augmented):
+        raise ValueError("Recorded feature ablation differences disagree with the matched model metrics.")
     if (
         evaluation["parent_context"] != run.context
         or evaluation["feature_run"] != run.id

@@ -1,8 +1,11 @@
 """Predictive questions and recorded diagnostics have a dedicated work area."""
 
 import streamlit as st
+from typing import Any, cast
 
-from firstlook.modeling import eligible_targets, predictor_policy
+from firstlook.modeling import eligible_targets
+from firstlook.model_protocol import model_preflight, comparison_verdict
+from firstlook.ui.task_controls import preflight_panel
 from firstlook.ui.components import finding_card, page_header
 from firstlook.ui.runtime import settings, start_model, workspace
 
@@ -71,8 +74,9 @@ if ws.model is None or getattr(configure, "open", False):
                         split_field = st.selectbox(
                             "Split field", options, format_func=ds.label, key="model_split_field"
                         )
-                candidates, excluded = predictor_policy(ds, target, ds.frame.loc[ws.context().row_ids])
-                candidates = [f for f in candidates if f != split_field][:40]
+                initial = model_preflight(ds, ws.context(), target, split, split_field)
+                candidates = initial.get("predictors", [])
+                excluded = initial.get("excluded", {})
                 predictors = st.multiselect(
                     "Permitted predictors",
                     candidates,
@@ -106,10 +110,26 @@ if ws.model is None or getattr(configure, "open", False):
                     )
                 else:
                     st.caption("Hosted TabPFN uses the dataset permission granted in Understand.")
+                readiness = (
+                    model_preflight(ds, ws.context(), target, split, split_field, predictors)
+                    if candidates
+                    else initial
+                )
+                preflight_panel(ds, readiness)
+                st.page_link(
+                    "app_pages/meaning.py",
+                    label="Review task and availability declarations",
+                    icon=":material/schema:",
+                )
+                st.page_link(
+                    "app_pages/event_lab.py",
+                    label="Build a target from recorded events",
+                    icon=":material/event_repeat:",
+                )
                 if st.button(
                     "Evaluate predictive structure",
                     type="primary",
-                    disabled=bool(ws.job_id) or not predictors,
+                    disabled=bool(ws.job_id) or not predictors or readiness["status"] == "blocked",
                 ):
                     try:
                         start_model(ws, target, split, split_field, predictors, hosted)
@@ -128,6 +148,17 @@ if ws.model:
         height=min(220, 38 + 35 * len(run.metrics)),
         alt="Held-out metrics for the evaluated models",
     )
+    st.info(comparison_verdict(run))
+    if run.parameters.get("readiness"):
+        recorded = cast(dict[str, Any], run.parameters["readiness"])
+        st.caption(
+            f"Recorded readiness: {recorded['status'].replace('_', ' ')} · {len(recorded['assumptions'])} availability assumptions · {recorded['primary_metric']} is the primary comparison metric."
+        )
+        with st.popover(
+            "Inspect the recorded protocol", icon=":material/fact_check:", on_change="rerun"
+        ) as protocol_inspector:
+            if protocol_inspector.open:
+                preflight_panel(ds, recorded)
     st.caption(
         "Target: "
         + ds.label(run.target)

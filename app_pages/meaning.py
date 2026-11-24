@@ -51,9 +51,14 @@ st.caption(
     f"{len(model.clarifications)} open decisions · {len(model.metrics)} reusable metrics · "
     f"{len(model.entities)} entity definitions · {len(model.relationships)} observed relationships"
 )
-decisions_tab, metrics_tab, structure_tab, contract_tab, scenarios_tab = st.tabs(
-    ["Decisions", "Metrics", "Structure & time", "Contract", "What if?"]
+decisions_tab, metrics_tab, structure_tab, contract_tab, scenarios_tab, task_tab = st.tabs(
+    ["Decisions", "Metrics", "Structure & time", "Contract", "What if?", "Task & availability"]
 )
+
+with task_tab:
+    from firstlook.ui.task_controls import task_editor
+
+    task_editor(ws)
 
 with decisions_tab:
     questions_panel, quantity_panel = st.columns([1, 1.7], gap="medium")

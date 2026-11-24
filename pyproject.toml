@@ -1,6 +1,6 @@
 [project]
 name = "firstlook"
-version = "0.4.0"
+version = "0.5.0"
 description = "Discover, challenge and preserve a first understanding of tabular data."
 requires-python = ">=3.12"
 
@@ -11,7 +11,7 @@ filterwarnings = ["error::RuntimeWarning"]
 
 [tool.ruff]
 line-length = 110
-exclude = [".venv", ".git", "scratch", "dist", "build"]
+exclude = [".venv", ".git", ".agents/skills", "scratch", "dist", "build"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]

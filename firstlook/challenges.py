@@ -20,6 +20,7 @@ from firstlook.semantics import dimensions
 from firstlook.semantic.checks import LABELS as SEMANTIC_LABELS
 
 LABELS = {
+    "recording_process": "Inspect recording coverage over time",
     **SEMANTIC_LABELS,
     "subgroup": "Compare recorded groups",
     "extremes": "Check extreme-value sensitivity",
@@ -41,10 +42,17 @@ def eligible(dataset: Dataset, inv: Investigation, finding: Finding) -> list[str
     result = inv.results[finding.result_id]
     op = result.plan.operation
     choices = []
+    if op != "recording_process" and any(
+        f.role.value == "timestamp"
+        and not f.excluded
+        and dataset.frame.loc[inv.context.row_ids, f.id].nunique() >= 2
+        for f in dataset.record.fields
+    ):
+        choices.append("recording_process")
     if op == "metric":
         from firstlook.semantic.checks import eligible as semantic_eligible
 
-        return semantic_eligible(dataset, result)
+        return choices + semantic_eligible(dataset, result)
     if op == "relationship":
         if dimensions(dataset):
             choices.append("subgroup")
@@ -79,6 +87,19 @@ def challenge(
             summary="This check is not applicable to the current view.",
         )
     original = inv.results[finding.result_id]
+    if operation == "recording_process":
+        from firstlook.recording_process import recording_plan, analyze_recording
+
+        result, view = analyze_recording(dataset, inv.context, recording_plan(dataset, inv.context))
+        return ChallengeResult(
+            id=cid,
+            parent_id=finding.id,
+            operation=operation,
+            status="changed" if result.metrics["review_triggers"] else "similar",
+            summary="Recorded missingness contrasts were computed over the full active population. A contrast is a review trigger; it does not prove a recording mechanism or refute the original observation.",
+            result=result,
+            chart=view.chart,
+        )
     if original.plan.operation == "metric":
         from firstlook.semantic.checks import check
 
@@ -321,5 +342,11 @@ def automatic_challenges(dataset: Dataset, inv: Investigation) -> None:
     selected = list(inv.findings[:3])
     selected += [f for f in inv.findings if f.family == "metric" and f not in selected][:2]
     for f in selected:
-        for op in eligible(dataset, inv, f)[:3]:
+        choices = [
+            op
+            for op in eligible(dataset, inv, f)
+            if op != "recording_process"
+            or not any(c.operation == "recording_process" for c in inv.challenges)
+        ]
+        for op in choices[:3]:
             inv.challenges.append(challenge(dataset, inv, f, op))
